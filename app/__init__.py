@@ -1,0 +1,1 @@
+"""PatentEasy backend package."""

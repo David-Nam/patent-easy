@@ -1,0 +1,74 @@
+{
+  "patents": [
+    {
+      "patent_id": "10-2023-0098765",
+      "title": "사용자 식습관 기반 음식 추천 시스템",
+      "applicant": "삼성전자",
+      "application_date": "2023-08-15",
+      "ipc_codes": ["G06N 3/08", "A23L 33/00", "G06V 10/70"],
+      "relevance_score": 92,
+      "tags": ["추천시스템", "딥러닝", "식품", "개인화"],
+      "abstract_preview": "사용자의 과거 식습관 데이터와 음식 이미지를 분석해 맞춤형 식단을 추천합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 음식 이미지와 사용자 건강 정보를 기반으로 섭취 영양소를 추정하고 맞춤형 식단을 추천하는 시스템에 관한 것이다.",
+      "inventors": ["김지훈", "이수민"],
+      "publication_date": "2024-02-20",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "사용자 단말로부터 음식 이미지를 수신하고, 학습된 이미지 분석 모델로 음식 종류를 식별하며, 식별된 음식에 대응하는 영양 정보를 산출하는 방법."
+        },
+        {
+          "number": 2,
+          "text": "사용자의 건강 상태 및 선호도에 기초하여 산출된 영양 정보를 보정하고 식단 추천 결과를 생성하는 방법."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2022-0043210",
+      "title": "이미지 기반 식품 영양성분 분석 장치",
+      "applicant": "네이버클라우드",
+      "application_date": "2022-04-12",
+      "ipc_codes": ["G06V 20/68", "G06N 20/00"],
+      "relevance_score": 86,
+      "tags": ["이미지인식", "영양분석", "머신러닝"],
+      "abstract_preview": "식품 사진으로부터 식품 영역을 검출하고 영양성분을 추정합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 이미지 내 식품 영역을 검출하고 식품 데이터베이스와 매칭하여 영양성분 및 열량을 추정하는 장치에 관한 것이다.",
+      "inventors": ["박도현"],
+      "publication_date": "2023-10-19",
+      "registration_date": "2025-01-03",
+      "legal_status": "등록",
+      "claims": [
+        {
+          "number": 1,
+          "text": "촬영 이미지에서 식품 후보 영역을 추출하고, 식품 후보 영역의 특징 벡터를 생성하여 식품 종류를 판단하는 장치."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2021-0012345",
+      "title": "배달 주문 이력 기반 개인화 추천 방법",
+      "applicant": "우아한형제들",
+      "application_date": "2021-11-05",
+      "ipc_codes": ["G06Q 30/06", "G06N 5/02"],
+      "relevance_score": 78,
+      "tags": ["배달앱", "개인화", "추천"],
+      "abstract_preview": "배달 주문 이력과 사용자 컨텍스트를 이용해 메뉴와 매장을 추천합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 사용자의 주문 이력, 위치, 시간대 및 선호도를 이용하여 배달 가능한 상품을 추천하는 방법에 관한 것이다.",
+      "inventors": ["최민석", "정하은"],
+      "publication_date": "2022-05-11",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "사용자의 주문 이력과 현재 위치를 기반으로 후보 매장을 산출하고, 선호도 점수에 따라 후보 매장을 정렬하는 방법."
+        }
+      ]
+    }
+  ]
+}

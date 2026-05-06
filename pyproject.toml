@@ -1,0 +1,10 @@
+[project]
+name = "patent-easy-backend"
+version = "0.1.0"
+description = "FastAPI backend for PatentEasy, an AI-assisted Korean patent search service."
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
