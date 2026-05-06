@@ -27,6 +27,12 @@ class Settings(BaseModel):
     kipris_base_url: str = Field(
         default_factory=lambda: os.getenv("KIPRIS_BASE_URL", "http://plus.kipris.or.kr")
     )
+    kipris_openapi_key_param: str = Field(
+        default_factory=lambda: os.getenv("KIPRIS_OPENAPI_KEY_PARAM", os.getenv("KIPRIS_KEY_PARAM", "accessKey"))
+    )
+    kipris_detail_key_param: str = Field(
+        default_factory=lambda: os.getenv("KIPRIS_DETAIL_KEY_PARAM", "ServiceKey")
+    )
     kipris_search_path: str = Field(
         default_factory=lambda: os.getenv(
             "KIPRIS_SEARCH_PATH",
@@ -36,7 +42,7 @@ class Settings(BaseModel):
     kipris_detail_path: str = Field(
         default_factory=lambda: os.getenv(
             "KIPRIS_DETAIL_PATH",
-            "/openapi/rest/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch",
+            "/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch",
         )
     )
     kipris_claim_path: str = Field(

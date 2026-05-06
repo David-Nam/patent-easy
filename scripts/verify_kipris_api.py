@@ -30,6 +30,9 @@ FIELD_CANDIDATES = {
 }
 IPC_CANDIDATES = ["ipc", "ipcnumber", "ipccode", "ipcmain"]
 
+OLD_OPENAPI_DETAIL_PATH = "/openapi/rest/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch"
+KIPO_DETAIL_PATH = "/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch"
+
 
 def main() -> int:
     load_dotenv(ROOT_DIR / ".env")
@@ -42,9 +45,11 @@ def main() -> int:
     NORMALIZED_DIR.mkdir(parents=True, exist_ok=True)
 
     base_url = os.getenv("KIPRIS_BASE_URL", "http://plus.kipris.or.kr").rstrip("/")
-    key_param = os.getenv("KIPRIS_KEY_PARAM", "accessKey")
+    openapi_key_param = os.getenv("KIPRIS_OPENAPI_KEY_PARAM", os.getenv("KIPRIS_KEY_PARAM", "accessKey"))
+    detail_key_param = os.getenv("KIPRIS_DETAIL_KEY_PARAM", "ServiceKey")
     query = os.getenv("KIPRIS_VERIFY_QUERY", "자동차")
     docs_count = os.getenv("KIPRIS_VERIFY_DOCS_COUNT", "5")
+    detail_path = env_path("KIPRIS_DETAIL_PATH", KIPO_DETAIL_PATH, deprecated=OLD_OPENAPI_DETAIL_PATH)
 
     endpoints = [
         {
@@ -60,7 +65,7 @@ def main() -> int:
                 "docsStart": "1",
                 "docsCount": docs_count,
                 "lastvalue": "R",
-                key_param: api_key,
+                openapi_key_param: api_key,
             },
         }
     ]
@@ -75,32 +80,27 @@ def main() -> int:
             or search_result.get("first_application_number")
         )
         if application_number:
-            for name, env_name, default_path in [
-                (
-                    "bibliography_detail",
-                    "KIPRIS_DETAIL_PATH",
-                    "/openapi/rest/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch",
-                ),
-                (
-                    "claim_detail",
+            detail_endpoint = {
+                "name": "bibliography_detail",
+                "path": detail_path,
+                "params": {
+                    "applicationNumber": application_number,
+                    detail_key_param: api_key,
+                },
+            }
+            claim_endpoint = {
+                "name": "claim_detail",
+                "path": os.getenv(
                     "KIPRIS_CLAIM_PATH",
                     "/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo",
                 ),
-            ]:
-                results.append(
-                    call_endpoint(
-                        client,
-                        base_url,
-                        {
-                            "name": name,
-                            "path": os.getenv(env_name, default_path),
-                            "params": {
-                                "applicationNumber": application_number,
-                                key_param: api_key,
-                            },
-                        },
-                    )
-                )
+                "params": {
+                    "applicationNumber": application_number,
+                    openapi_key_param: api_key,
+                },
+            }
+            for endpoint in [detail_endpoint, claim_endpoint]:
+                results.append(call_endpoint(client, base_url, endpoint))
         else:
             print("Search response did not expose an application number; skipped detail endpoints.")
 
@@ -109,6 +109,13 @@ def main() -> int:
     print(f"Wrote normalized fixtures to {NORMALIZED_DIR}")
     print(f"Updated {REPORT_PATH}")
     return 0
+
+
+def env_path(name: str, default: str, deprecated: str | None = None) -> str:
+    value = os.getenv(name)
+    if not value or value == deprecated:
+        return default
+    return value
 
 
 def call_endpoint(client: httpx.Client, base_url: str, endpoint: dict) -> dict:
@@ -327,6 +334,9 @@ def write_report(results: list[dict]) -> None:
         "- OpenAI is not required for this verification.",
         "",
         "## Endpoints Checked",
+        "",
+        "Endpoint note: OpenAPI endpoints use `accessKey`, while the",
+        "bibliography detail endpoint uses `/kipo-api/kipi/...` with `ServiceKey`.",
         "",
     ]
 

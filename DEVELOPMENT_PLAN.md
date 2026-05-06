@@ -2,8 +2,8 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.2
-> **최종 수정일**: 2026-05-06
+> **문서 버전**: v1.3
+> **최종 수정일**: 2026-05-07
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
 ---
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 환경 셋업 및 Mock 서버 골격 구현. KIPRIS Plus API 검증은 API 키 입력 후 실행 대기.
+**현재 진행 상태**: Phase 2-A 환경 셋업, Mock 서버 골격 구현, KIPRIS Plus API 검증 완료.
 
 ---
 
@@ -572,7 +572,7 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 - [ ] **Phase 2-A**
   - [x] 작업 1. 환경 셋업
-  - [ ] 작업 2. KIPRIS Plus API 검증 (`scripts/verify_kipris_api.py` 준비, 실제 키 실행 대기)
+  - [x] 작업 2. KIPRIS Plus API 검증
   - [ ] 작업 3. LLM 키워드 추출 프롬프트 설계
   - [x] 작업 4. Mock 서버 v1
   - [x] 작업 5. Mock 서버 v2
@@ -601,11 +601,13 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 | 2026-05-04 | 요약은 별도 엔드포인트로 분리 (초안) | 검색 시 일괄 생성 시 응답 30초+, 비용 폭증 |
 | 2026-05-06 | KIPRIS는 실제 API 키 검증을 게이트로 설정 | 실제 응답 구조 확인 전 `KIPRISClient` 구현 금지 |
 | 2026-05-06 | OpenAI 의존 기능은 Mock 우선 구현 | 키 발급 전에도 프론트 연동과 API 스키마 확정 가능 |
+| 2026-05-07 | KIPRIS 검색·서지상세·청구항 API 검증 완료 | 검색/청구항은 `/openapi/rest`+`accessKey`, 서지상세는 `/kipo-api/kipi`+`ServiceKey` 사용 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.3 | 2026-05-07 | KIPRIS Plus API 검증 완료 상태와 endpoint/key parameter 차이 반영 |
 | v1.2 | 2026-05-06 | Codex 단계별 실행·검증·컨펌 운영 규칙 추가 |
 | v1.1 | 2026-05-06 | KIPRIS 검증 게이트, OpenAI Mock 우선 개발 방침 반영 |
 | v1.0 | 2026-05-04 | 초기 작성 |
