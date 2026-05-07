@@ -1,0 +1,42 @@
+[
+  {
+    "query": "배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능",
+    "expected_keywords": ["음식 이미지 인식", "칼로리 자동 계산", "맞춤형 식단 추천"],
+    "expected_ipc_codes": ["G06V", "G06N", "A23L"]
+  },
+  {
+    "query": "전기차 충전소 빈자리를 예측해서 운전자에게 추천하는 서비스",
+    "expected_keywords": ["전기차 충전소 예측", "충전 인프라 추천", "차량 위치 기반 안내"],
+    "expected_ipc_codes": ["B60L", "G06Q", "G06N"]
+  },
+  {
+    "query": "중고차 사진과 보험 이력을 분석해서 수출 상담 답변을 자동으로 만들어주는 시스템",
+    "expected_keywords": ["중고차 상태 분석", "보험 이력 처리", "자동 상담 응답"],
+    "expected_ipc_codes": ["G06Q", "G06V", "G06F"]
+  },
+  {
+    "query": "스마트 거울이 사용자의 운동 자세를 보고 잘못된 자세를 알려주는 홈트레이닝 기능",
+    "expected_keywords": ["운동 자세 인식", "동작 분석", "피드백 제공"],
+    "expected_ipc_codes": ["G06V", "G06N", "A63B"]
+  },
+  {
+    "query": "노인이 넘어지면 보호자에게 자동으로 알림을 보내는 웨어러블 기기",
+    "expected_keywords": ["낙상 감지", "웨어러블 센서", "보호자 알림"],
+    "expected_ipc_codes": ["A61B", "G08B", "H04W"]
+  },
+  {
+    "query": "자동차 앞유리에 길 안내와 위험 정보를 증강현실로 보여주는 기능",
+    "expected_keywords": ["차량 증강현실 표시", "전방 표시 장치", "주행 위험 안내"],
+    "expected_ipc_codes": ["G02B", "B60K", "G08G"]
+  },
+  {
+    "query": "약 복용 시간을 잊지 않도록 가족에게도 알림을 보내는 복약 관리 앱",
+    "expected_keywords": ["복약 일정 관리", "복약 알림", "보호자 공유"],
+    "expected_ipc_codes": ["G16H", "G06Q", "H04W"]
+  },
+  {
+    "query": "카메라로 재활용 쓰레기를 인식해서 분리배출 방법을 알려주는 서비스",
+    "expected_keywords": ["폐기물 이미지 인식", "재활용품 분류", "분리배출 안내"],
+    "expected_ipc_codes": ["G06V", "B07C", "G06N"]
+  }
+]
