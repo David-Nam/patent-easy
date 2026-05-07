@@ -2,8 +2,8 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.6
-> **최종 수정일**: 2026-05-07
+> **문서 버전**: v1.7
+> **최종 수정일**: 2026-05-08
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
 ---
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 완료. LLM provider는 Gemini 무료 tier 우선, OpenAI 전환 가능 구조로 진행. 다음 작업은 Phase 2-B 작업 6 KIPRIS Client 구현.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6 완료. 다음 작업은 Phase 2-B 작업 7 Cache Layer 구현.
 
 ---
 
@@ -436,6 +436,8 @@ LLM_MONTHLY_BUDGET_USD=50
 
 #### 작업 6. KIPRIS Client 구현
 
+**상태**: 완료 (2026-05-08)
+
 **완료 조건**:
 - `app/services/kipris_client.py` 작성
 - async httpx 사용
@@ -445,6 +447,14 @@ LLM_MONTHLY_BUDGET_USD=50
   - (회의 결과에 따라) `get_family(patent_id: str)`
 - 에러 처리: 네트워크 오류, 응답 파싱 실패, rate limit
 - 단위 테스트 (`tests/test_kipris_client.py`)
+
+**검증 결과**:
+- fixture 기반 단위 테스트: `tests/test_kipris_client.py` 5개 통과
+- 전체 테스트: 11개 통과
+- 실제 KIPRIS 최소 호출 성공:
+  - 자유검색 1건 조회
+  - 검색 결과 첫 특허의 서지상세 및 청구항 조회
+- 로컬 `.env`의 서지상세 경로는 `/kipo-api/kipi/...`와 `ServiceKey`를 사용해야 함
 
 #### 작업 7. Cache Layer 구현
 
@@ -585,7 +595,7 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
   - [x] 작업 4. Mock 서버 v1
   - [x] 작업 5. Mock 서버 v2
 - [ ] **Phase 2-B**
-  - [ ] 작업 6. KIPRIS Client
+  - [x] 작업 6. KIPRIS Client
   - [ ] 작업 7. Cache Layer
   - [ ] 작업 8. Query Builder
   - [ ] 작업 9. 검색 엔드포인트 진짜 구현
@@ -613,11 +623,13 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 | 2026-05-07 | Mock API 프론트엔드 공유 문서 분리 | 사람용 가이드와 AI 도구용 통합 스펙을 각각 제공 |
 | 2026-05-07 | LLM 키워드 추출 프롬프트는 JSON-only 계약으로 설계 | 실제 LLM 키 없이 Mock-first 검증을 완료하고 provider 검증은 Query Builder 단계에서 수행 |
 | 2026-05-07 | LLM provider는 Gemini 무료 tier를 기본값으로 채택 | 초기 비용을 줄이고, `LLM_PROVIDER` 추상화로 OpenAI 전환 가능성을 유지 |
+| 2026-05-08 | KIPRIS Client는 fixture 검증과 실제 최소 호출을 모두 통과 | 검색/상세/청구항 파싱을 실제 응답 구조 기준으로 구현 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.7 | 2026-05-08 | KIPRIS Client 구현 완료 상태와 실제 KIPRIS 최소 호출 검증 결과 반영 |
 | v1.6 | 2026-05-07 | Gemini 무료 tier 우선 전략과 OpenAI 전환 가능한 LLM provider 계획 반영 |
 | v1.5 | 2026-05-07 | Phase 2-A 완료 상태와 LLM 키워드 추출 프롬프트 검증 결과 반영 |
 | v1.4 | 2026-05-07 | Mock 서버 v2 완료 상태와 프론트엔드 공유 문서 산출물 반영 |
