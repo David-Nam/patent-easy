@@ -1,6 +1,6 @@
 # PatentEasy Backend
 
-AI 기반 특허 검색 서비스 PatentEasy의 FastAPI 백엔드입니다. KIPRIS Plus API는 실제 키로 검증했고, OpenAI 의존 기능은 키 발급 전까지 Mock으로 동작합니다.
+AI 기반 특허 검색 서비스 PatentEasy의 FastAPI 백엔드입니다. KIPRIS Plus API는 실제 키로 검증했고, LLM 의존 기능은 Gemini 무료 tier를 우선 사용하되 OpenAI로 전환 가능한 구조로 진행합니다. 실제 LLM 연결 전까지는 Mock으로 동작합니다.
 
 Python 프로젝트 메타데이터와 테스트 설정은 `pyproject.toml`에 두고, 로컬 설치 의존성은 `requirements.txt`로 관리합니다.
 

@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.5
+> **문서 버전**: v1.6
 > **최종 수정일**: 2026-05-07
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 완료. 다음 작업 전 무료/부분 무료 LLM API 대안 검토.
+**현재 진행 상태**: Phase 2-A 작업 1~5 완료. LLM provider는 Gemini 무료 tier 우선, OpenAI 전환 가능 구조로 진행. 다음 작업은 Phase 2-B 작업 6 KIPRIS Client 구현.
 
 ---
 
@@ -96,8 +96,8 @@
                     │  │  쿼리 빌더 (Query Builder)        │    │ ──▶ │  Open API     │
                     │  │  - 자연어 → 키워드 추출            │    │     └──────────────┘
                     │  │  - 동의어 확장                    │    │     ┌──────────────┐
-                    │  │  - IPC 코드 추정                  │    │     │   OpenAI API  │
-                    │  └──────────────┬─────────────────┘    │ ──▶ │  (또는 대안)    │
+                    │  │  - IPC 코드 추정                  │    │     │  LLM Provider │
+                    │  └──────────────┬─────────────────┘    │ ──▶ │ Gemini/OpenAI  │
                     │                 ▼                       │     └──────────────┘
                     │  ┌────────────────────────────────┐    │
                     │  │  검색 클라이언트 (Search Client)  │    │
@@ -118,9 +118,9 @@
 
 | 모듈 | 책임 | 핵심 의존성 |
 |---|---|---|
-| **Query Builder** | 자연어 → 검색 쿼리 변환 | OpenAI API |
+| **Query Builder** | 자연어 → 검색 쿼리 변환 | LLM Provider (Gemini 기본, OpenAI 전환 가능) |
 | **Search Client** | KIPRIS API 호출 + 캐싱 | httpx, SQLite |
-| **Result Processor** | 재정렬, 요약 생성 | OpenAI API |
+| **Result Processor** | 재정렬, 요약 생성 | LLM Provider (Gemini 기본, OpenAI 전환 가능) |
 | **API Layer** | HTTP 엔드포인트, 검증, 에러 처리 | FastAPI, Pydantic |
 | **Cache Layer** | 호출 결과 캐싱 | SQLite |
 
@@ -151,7 +151,7 @@ patent-easy-backend/
 │   │   ├── __init__.py
 │   │   ├── query_builder.py     # 자연어 → 키워드/IPC 추출
 │   │   ├── kipris_client.py     # KIPRIS API 호출
-│   │   ├── llm_client.py        # OpenAI API 호출 (요약/재정렬)
+│   │   ├── llm_client.py        # Gemini/OpenAI LLM provider 호출
 │   │   └── cache.py             # 캐싱 레이어
 │   ├── prompts/                 # LLM 프롬프트 (버전 관리)
 │   │   ├── extract_keywords.txt
@@ -185,7 +185,7 @@ patent-easy-backend/
 | **웹 프레임워크** | FastAPI | 자동 문서화(`/docs`), Pydantic 통합, async 지원 |
 | **HTTP 클라이언트** | httpx | async 지원, requests보다 현대적 |
 | **데이터 검증** | Pydantic v2 | FastAPI와 완벽 통합 |
-| **LLM API** | OpenAI (gpt-4o-mini 우선) | 비용/품질 밸런스. 필요 시 Claude API로 교체 가능하게 추상화 |
+| **LLM API** | Gemini API 무료 tier 우선 | 초기 비용 0원으로 개발. `LLM_PROVIDER` 설정으로 OpenAI 교체 가능하게 추상화 |
 | **임베딩** | (필요 시) text-embedding-3-small or bge-m3 | 재정렬에 사용. MVP에서는 보류 가능 |
 | **캐싱** | SQLite | 설정 0, 학교 프로젝트 규모에 충분 |
 | **벡터DB** | (필요 시) Chroma 로컬 | 단일 특허 청구항 처리 정도면 메모리로 충분 |
@@ -195,7 +195,10 @@ patent-easy-backend/
 
 ```bash
 # LLM
-OPENAI_API_KEY=sk-...
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash-lite
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 
 # KIPRIS
@@ -382,8 +385,8 @@ LLM_MONTHLY_BUDGET_USD=50
 #### 작업 3. LLM 키워드 추출 프롬프트 설계 ⭐
 
 **완료 조건**:
-- OpenAI API 키 발급 전에는 `app/services/mock_llm_client.py`의 deterministic mock 사용
-- OpenAI API 키 발급 후 실제 프롬프트 검증 진행
+- 실제 LLM API 키 발급 전에는 `app/services/mock_llm_client.py`의 deterministic mock 사용
+- Gemini API 무료 tier를 우선 검증하고, OpenAI는 동일 스키마로 교체 가능하게 유지
 - 다음 입력에 대해 일관된 출력을 내는 프롬프트 작성 (`app/prompts/extract_keywords.txt`):
   ```
   입력: "배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능"
@@ -464,7 +467,9 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 **완료 조건**:
 - `app/services/query_builder.py` 작성
-- 작업 3에서 만든 프롬프트를 OpenAI API로 호출
+- 작업 3에서 만든 프롬프트를 Gemini API로 우선 호출
+- `LLM_PROVIDER=gemini|openai|mock` 설정으로 provider 선택 가능
+- OpenAI adapter는 같은 입출력 스키마(`ExtractedQuery`)를 유지
 - 출력 검증 (JSON 파싱 실패 시 재시도, 최대 2회)
 - 단위 테스트 (예시 5개)
 
@@ -478,10 +483,12 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 - 응답 시간 목표: 캐시 히트 1초, 미스 5~10초
 - E2E 테스트 5개 시나리오 통과
 
-#### 작업 10. LLM Client 구현 (요약·재정렬)
+#### 작업 10. LLM Client 구현 (Gemini 기본·OpenAI 전환)
 
 **완료 조건**:
 - `app/services/llm_client.py` 작성
+- Gemini adapter를 기본 구현으로 작성
+- OpenAI adapter를 같은 인터페이스로 추가 또는 교체 가능하게 설계
 - 메서드:
   - `summarize_patent(claims: list[Claim], user_query: str | None) -> SummaryResponse`
   - `rerank_results(query: str, results: list[PatentListItem]) -> list[PatentListItem]`
@@ -558,7 +565,8 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 | **KIPRIS API 일 1,000건 한도 초과** | 매우 높음 | 캐싱 적극 활용, 정규화된 캐시 키 사용 |
 | **LLM 환각 (요약 부정확)** | 높음 | 청구항 원문 병기, 참고용 면책 문구, 유사도 점수 명시 |
 | **자연어 → 키워드 변환 품질 저하** | 높음 | 입력 가이드 예시 제공, 변환 결과 사용자에게 노출 |
-| **LLM API 비용 초과** | 중간 | 캐싱, 월 $50 한도 알림, gpt-4o-mini 우선 사용 |
+| **Gemini 무료 tier 한도/정책 제약** | 중간 | 캐싱, 호출량 제한, 민감 입력은 paid tier 또는 OpenAI 전환 검토 |
+| **LLM API 비용 초과** | 중간 | Gemini 무료 tier 우선, 캐싱, 월 $50 한도 알림, OpenAI는 필요 시만 전환 |
 | **KIPRIS API 응답 구조가 가정과 다름** | 높음 | Phase 2-A 작업 2에서 일찍 검증 |
 | **프롬프트 품질이 발표 시연에 부적합** | 중간 | 작업 3에서 5~10개 시나리오 검증, A/B 테스트 |
 
@@ -600,20 +608,22 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 | 2026-05-04 | FastAPI 채택 | Pydantic 통합, 자동 문서화 |
 | 2026-05-04 | 요약은 별도 엔드포인트로 분리 (초안) | 검색 시 일괄 생성 시 응답 30초+, 비용 폭증 |
 | 2026-05-06 | KIPRIS는 실제 API 키 검증을 게이트로 설정 | 실제 응답 구조 확인 전 `KIPRISClient` 구현 금지 |
-| 2026-05-06 | OpenAI 의존 기능은 Mock 우선 구현 | 키 발급 전에도 프론트 연동과 API 스키마 확정 가능 |
+| 2026-05-06 | LLM 의존 기능은 Mock 우선 구현 | 키 발급 전에도 프론트 연동과 API 스키마 확정 가능 |
 | 2026-05-07 | KIPRIS 검색·서지상세·청구항 API 검증 완료 | 검색/청구항은 `/openapi/rest`+`accessKey`, 서지상세는 `/kipo-api/kipi`+`ServiceKey` 사용 |
 | 2026-05-07 | Mock API 프론트엔드 공유 문서 분리 | 사람용 가이드와 AI 도구용 통합 스펙을 각각 제공 |
-| 2026-05-07 | LLM 키워드 추출 프롬프트는 JSON-only 계약으로 설계 | OpenAI 키 없이 Mock-first 검증을 완료하고 실제 API 검증은 Query Builder 단계에서 수행 |
+| 2026-05-07 | LLM 키워드 추출 프롬프트는 JSON-only 계약으로 설계 | 실제 LLM 키 없이 Mock-first 검증을 완료하고 provider 검증은 Query Builder 단계에서 수행 |
+| 2026-05-07 | LLM provider는 Gemini 무료 tier를 기본값으로 채택 | 초기 비용을 줄이고, `LLM_PROVIDER` 추상화로 OpenAI 전환 가능성을 유지 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.6 | 2026-05-07 | Gemini 무료 tier 우선 전략과 OpenAI 전환 가능한 LLM provider 계획 반영 |
 | v1.5 | 2026-05-07 | Phase 2-A 완료 상태와 LLM 키워드 추출 프롬프트 검증 결과 반영 |
 | v1.4 | 2026-05-07 | Mock 서버 v2 완료 상태와 프론트엔드 공유 문서 산출물 반영 |
 | v1.3 | 2026-05-07 | KIPRIS Plus API 검증 완료 상태와 endpoint/key parameter 차이 반영 |
 | v1.2 | 2026-05-06 | Codex 단계별 실행·검증·컨펌 운영 규칙 추가 |
-| v1.1 | 2026-05-06 | KIPRIS 검증 게이트, OpenAI Mock 우선 개발 방침 반영 |
+| v1.1 | 2026-05-06 | KIPRIS 검증 게이트, LLM Mock 우선 개발 방침 반영 |
 | v1.0 | 2026-05-04 | 초기 작성 |
 
 ---
@@ -622,6 +632,9 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 ### 9.1 외부 문서
 - [KIPRIS Plus Open API](https://plus.kipris.or.kr/portal/main.do)
+- [Gemini API Docs](https://ai.google.dev/gemini-api/docs)
+- [Gemini API Pricing](https://ai.google.dev/gemini-api/docs/pricing)
+- [Gemini Structured Output](https://ai.google.dev/gemini-api/docs/structured-output)
 - [OpenAI API Reference](https://platform.openai.com/docs/api-reference)
 - [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
 

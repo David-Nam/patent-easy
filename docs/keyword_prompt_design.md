@@ -9,7 +9,9 @@ broad recall.
 
 ## Current Status
 
-- OpenAI API integration is not required yet.
+- Real LLM provider integration is not required yet.
+- Gemini API free tier is the default target for the first real provider.
+- OpenAI must remain switchable through the same output contract.
 - `app/services/mock_llm_client.py` provides deterministic mock outputs for
   frontend and backend flow testing.
 - The production prompt lives in `app/prompts/extract_keywords.txt`.
@@ -48,5 +50,6 @@ cases:
 python scripts/manual_e2e_test.py
 ```
 
-When an OpenAI key is available, replace the mock call with the actual
-`response_format` JSON mode in the later Query Builder task.
+When a Gemini key is available, replace the mock call with Gemini structured
+output in the later Query Builder task. Keep the same schema so OpenAI can be
+used as a provider replacement later.

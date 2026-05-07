@@ -6,7 +6,7 @@ from app.schemas.summary import SummaryResponse
 
 
 class MockLLMClient:
-    """Deterministic replacement for OpenAI during the mock-first phase."""
+    """Deterministic replacement for real LLM providers during the mock phase."""
 
     def extract_keywords(self, query: str) -> ExtractedQuery:
         normalized = query.replace(" ", "")

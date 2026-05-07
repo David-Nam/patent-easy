@@ -7,7 +7,7 @@ Last verification run: `2026-05-06T23:38:58.341158+00:00`
 - KIPRIS Plus API must be verified with a real `KIPRIS_API_KEY` before implementing the real `KIPRISClient`.
 - Raw responses are saved exactly as received under `tests/fixtures/kipris_raw/`.
 - Normalized JSON is generated under `tests/fixtures/kipris_normalized/` only to make field review easier.
-- OpenAI is not required for this verification.
+- LLM provider keys are not required for this verification.
 
 ## Endpoints Checked
 
