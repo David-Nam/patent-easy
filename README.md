@@ -1,6 +1,6 @@
 # PatentEasy Backend
 
-AI 기반 특허 검색 서비스 PatentEasy의 FastAPI 백엔드입니다. 현재는 KIPRIS Plus API 검증 전 단계이므로 OpenAI 의존 기능은 Mock으로 동작합니다.
+AI 기반 특허 검색 서비스 PatentEasy의 FastAPI 백엔드입니다. KIPRIS Plus API는 실제 키로 검증했고, OpenAI 의존 기능은 키 발급 전까지 Mock으로 동작합니다.
 
 Python 프로젝트 메타데이터와 테스트 설정은 `pyproject.toml`에 두고, 로컬 설치 의존성은 `requirements.txt`로 관리합니다.
 
@@ -23,6 +23,15 @@ uvicorn app.main:app --reload --port 8000
 - Swagger UI: `http://localhost:8000/docs`
 
 ## Mock API
+
+Frontend integration details are in `docs/frontend_mock_api_guide.md`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | 서버 상태 확인 |
+| `POST` | `/api/v1/search` | 자연어 검색 요청에 대한 Mock 특허 목록 반환 |
+| `GET` | `/api/v1/patents/{patent_id}` | Mock 특허 상세 조회 |
+| `POST` | `/api/v1/patents/{patent_id}/summary` | Mock AI 요약 생성 |
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/search \
