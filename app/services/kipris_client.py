@@ -9,6 +9,7 @@ import httpx
 from app.config import Settings, get_settings
 from app.schemas.patent import Claim, PatentDetail, PatentListItem
 from app.schemas.search import SearchFilters
+from app.services.cache import SQLiteCache, normalize_cache_key
 
 
 class KIPRISError(RuntimeError):
@@ -42,10 +43,13 @@ class KIPRISClient:
         self,
         settings: Settings | None = None,
         http_client: httpx.AsyncClient | None = None,
+        cache: SQLiteCache | None = None,
+        cache_enabled: bool = True,
         timeout: float = 20.0,
     ) -> None:
         self.settings = settings or get_settings()
         self.http_client = http_client
+        self.cache = cache if cache is not None else SQLiteCache() if cache_enabled else None
         self.timeout = timeout
 
     async def search_patents(
@@ -62,6 +66,11 @@ class KIPRISClient:
         if not query:
             return []
 
+        cache_key = self._search_cache_key(keywords, filters, page_size)
+        cached_items = self.cache.get(cache_key) if self.cache is not None else None
+        if cached_items is not None:
+            return [PatentListItem.model_validate(item) for item in cached_items]
+
         root = await self._get_xml(
             endpoint,
             {
@@ -74,7 +83,14 @@ class KIPRISClient:
             },
         )
         items = [_map_search_item(item, index) for index, item in enumerate(_find_all(root, "PatentUtilityInfo"))]
-        return _apply_filters(items, filters)
+        filtered_items = _apply_filters(items, filters)
+        if self.cache is not None:
+            self.cache.set(
+                cache_key,
+                [item.model_dump(mode="json") for item in filtered_items],
+                self.settings.cache_ttl_search,
+            )
+        return filtered_items
 
     async def get_patent_detail(self, patent_id: str) -> PatentDetail:
         compact_id = _compact_patent_id(patent_id)
@@ -87,9 +103,17 @@ class KIPRISClient:
             key_param=self.settings.kipris_openapi_key_param,
         )
 
+        cache_key = self._detail_cache_key(compact_id)
+        cached_detail = self.cache.get(cache_key) if self.cache is not None else None
+        if cached_detail is not None:
+            return PatentDetail.model_validate(cached_detail)
+
         detail_root = await self._get_xml(detail_endpoint, {"applicationNumber": compact_id})
         claim_root = await self._get_xml(claim_endpoint, {"applicationNumber": compact_id})
-        return _map_patent_detail(detail_root, claim_root)
+        detail = _map_patent_detail(detail_root, claim_root)
+        if self.cache is not None:
+            self.cache.set(cache_key, detail.model_dump(mode="json"), self.settings.cache_ttl_detail)
+        return detail
 
     async def _get_xml(self, endpoint: _Endpoint, params: dict[str, str]) -> ET.Element:
         api_key = self.settings.kipris_api_key
@@ -117,6 +141,34 @@ class KIPRISClient:
 
         _raise_for_service_error(root)
         return root
+
+    def _search_cache_key(
+        self,
+        keywords: list[str],
+        filters: SearchFilters | None,
+        page_size: int,
+    ) -> str:
+        return normalize_cache_key(
+            "kipris:search",
+            {
+                "base_url": self.settings.kipris_base_url,
+                "path": self.settings.kipris_search_path,
+                "keywords": keywords,
+                "filters": filters.model_dump(mode="json") if filters else None,
+                "page_size": page_size,
+            },
+        )
+
+    def _detail_cache_key(self, compact_id: str) -> str:
+        return normalize_cache_key(
+            "kipris:detail",
+            {
+                "base_url": self.settings.kipris_base_url,
+                "detail_path": self.settings.kipris_detail_path,
+                "claim_path": self.settings.kipris_claim_path,
+                "application_number": compact_id,
+            },
+        )
 
 
 def _raise_for_service_error(root: ET.Element) -> None:

@@ -6,6 +6,7 @@ import pytest
 
 from app.config import Settings
 from app.schemas.search import SearchFilters
+from app.services.cache import SQLiteCache
 from app.services.kipris_client import (
     KIPRISClient,
     KIPRISConfigurationError,
@@ -32,6 +33,7 @@ def test_search_patents_maps_fixture_records_and_filters():
             client = KIPRISClient(
                 settings=_settings(kipris_search_path="/search"),
                 http_client=async_client,
+                cache_enabled=False,
             )
             results = await client.search_patents(
                 ["전기자동차", "배터리"],
@@ -74,6 +76,7 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
             client = KIPRISClient(
                 settings=_settings(kipris_detail_path="/detail", kipris_claim_path="/claim"),
                 http_client=async_client,
+                cache_enabled=False,
             )
             detail = await client.get_patent_detail("10-2023-0147601")
         finally:
@@ -104,7 +107,7 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
 
 def test_missing_api_key_raises_configuration_error():
     async def run() -> None:
-        client = KIPRISClient(settings=_settings(kipris_api_key=None))
+        client = KIPRISClient(settings=_settings(kipris_api_key=None), cache_enabled=False)
         with pytest.raises(KIPRISConfigurationError):
             await client.search_patents(["자동차"])
 
@@ -121,7 +124,7 @@ def test_service_error_raises_upstream_error():
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         try:
-            client = KIPRISClient(settings=_settings(), http_client=async_client)
+            client = KIPRISClient(settings=_settings(), http_client=async_client, cache_enabled=False)
             with pytest.raises(KIPRISUpstreamError) as exc_info:
                 await client.search_patents(["자동차"])
         finally:
@@ -140,11 +143,70 @@ def test_invalid_xml_raises_parse_error():
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         try:
-            client = KIPRISClient(settings=_settings(), http_client=async_client)
+            client = KIPRISClient(settings=_settings(), http_client=async_client, cache_enabled=False)
             with pytest.raises(KIPRISParseError):
                 await client.search_patents(["자동차"])
         finally:
             await async_client.aclose()
+
+    asyncio.run(run())
+
+
+def test_search_patents_uses_cache_for_repeated_requests(tmp_path):
+    async def run() -> None:
+        request_count = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal request_count
+            request_count += 1
+            return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(
+                settings=_settings(kipris_search_path="/search"),
+                http_client=async_client,
+                cache=SQLiteCache(tmp_path / "cache.sqlite"),
+            )
+            first = await client.search_patents(["전기 자동차"], page_size=5)
+            second = await client.search_patents(["전기차"], page_size=5)
+        finally:
+            await async_client.aclose()
+
+        assert request_count == 1
+        assert first[0].patent_id == second[0].patent_id
+        assert isinstance(second[0].application_date, str)
+
+    asyncio.run(run())
+
+
+def test_get_patent_detail_uses_cache_for_repeated_requests(tmp_path):
+    async def run() -> None:
+        request_paths: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            request_paths.append(request.url.path)
+            if request.url.path == "/detail":
+                return _xml_response(_read_fixture("bibliography_detail_20260506T233858Z.xml"))
+            if request.url.path == "/claim":
+                return _xml_response(_read_fixture("claim_detail_20260506T233858Z.xml"))
+            return httpx.Response(404, text="not found")
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(
+                settings=_settings(kipris_detail_path="/detail", kipris_claim_path="/claim"),
+                http_client=async_client,
+                cache=SQLiteCache(tmp_path / "cache.sqlite"),
+            )
+            first = await client.get_patent_detail("10-2023-0147601")
+            second = await client.get_patent_detail("1020230147601")
+        finally:
+            await async_client.aclose()
+
+        assert request_paths == ["/detail", "/claim"]
+        assert first.patent_id == second.patent_id
+        assert len(second.claims) == 14
 
     asyncio.run(run())
 
