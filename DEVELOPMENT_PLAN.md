@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.10
+> **문서 버전**: v1.11
 > **최종 수정일**: 2026-05-08
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~7 완료. 다음 작업은 Phase 2-B 작업 8 Query Builder 구현.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~8 완료. 다음 작업은 Phase 2-B 작업 9 검색 엔드포인트 진짜 구현.
 
 ---
 
@@ -536,6 +536,8 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 #### 작업 8. Query Builder 구현
 
+**상태**: 완료 (2026-05-08)
+
 **완료 조건**:
 - `app/services/query_builder.py` 작성
 - 작업 3에서 만든 프롬프트를 Gemini API로 우선 호출
@@ -543,6 +545,18 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 - OpenAI adapter는 같은 입출력 스키마(`ExtractedQuery`)를 유지
 - 출력 검증 (JSON 파싱 실패 시 재시도, 최대 2회)
 - 단위 테스트 (예시 5개)
+
+**구현 내용**:
+- mock provider는 deterministic `mock_llm_client` 사용
+- Gemini provider는 REST `generateContent`와 structured output schema 사용
+- OpenAI provider는 chat completions JSON mode 사용
+- provider 응답은 `ExtractedQuery`로 파싱하고 키워드/IPC/확장어 구조 검증
+- JSON 파싱 또는 schema 검증 실패 시 최대 2회 재시도
+- 단위 테스트 (`tests/test_query_builder.py`)
+
+**검증 결과**:
+- Query Builder 단위 테스트: `tests/test_query_builder.py` 8개 통과
+- 전체 테스트: 25개 통과
 
 #### 작업 9. 검색 엔드포인트 진짜 구현
 
@@ -751,7 +765,7 @@ pytest -m live_llm
 - [ ] **Phase 2-B**
   - [x] 작업 6. KIPRIS Client
   - [x] 작업 7. Cache Layer
-  - [ ] 작업 8. Query Builder
+  - [x] 작업 8. Query Builder
   - [ ] 작업 9. 검색 엔드포인트 진짜 구현
   - [ ] 작업 10. LLM Client
   - [ ] 작업 11. 요약 엔드포인트 진짜 구현
@@ -784,11 +798,13 @@ pytest -m live_llm
 | 2026-05-08 | MVP 언어는 Python 유지 | 현재 FastAPI/Pydantic/KIPRIS fixture 기반 구현을 유지하는 편이 일정상 가장 현실적 |
 | 2026-05-08 | 기능별 테스트는 각 작업 안에서 작성 | Phase 3는 테스트를 처음 만드는 단계가 아니라 배포 전 통합 검증 단계 |
 | 2026-05-08 | Cache Layer 구현 및 KIPRIS Client 연결 완료 | KIPRIS 호출 절약을 위해 검색/상세 결과를 SQLite TTL cache에 저장 |
+| 2026-05-08 | Query Builder provider abstraction 구현 완료 | Gemini 기본, OpenAI 전환, Mock fallback을 동일 `ExtractedQuery` 스키마로 유지 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.11 | 2026-05-08 | Query Builder 완료 상태와 검증 결과 반영 |
 | v1.10 | 2026-05-08 | Cache Layer 완료 상태와 검증 결과 반영 |
 | v1.9 | 2026-05-08 | 기능별 테스트 작성 시점과 Phase 3 통합 검증 역할 명확화 |
 | v1.8 | 2026-05-08 | Phase 3~4를 백엔드 검증·배포 계획으로 재구성하고 언어 선택 검토 추가 |
@@ -836,9 +852,9 @@ pytest -m live_llm
 **현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6 완료
 
 **즉시 할 일**:
-1. Phase 2-B 작업 8 Query Builder 구현
-2. 작업 8 완료 후 구현 요약과 검증 방법 보고
-3. 사용자 컨펌 후 Query Builder 단위 테스트와 전체 테스트 실행
+1. Phase 2-B 작업 9 검색 엔드포인트 진짜 구현
+2. 작업 9 완료 후 구현 요약과 검증 방법 보고
+3. 사용자 컨펌 후 검색 API 통합 테스트와 전체 테스트 실행
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."
