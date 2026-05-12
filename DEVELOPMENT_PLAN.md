@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.15
+> **문서 버전**: v1.17
 > **최종 수정일**: 2026-05-12
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~10 완료. 다음 작업은 Phase 2-B 작업 11 요약 엔드포인트 진짜 구현.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료. 다음 작업은 Phase 2-B 작업 12 챗봇 엔드포인트 조건부 진행 또는 Phase 3 진입 여부 결정.
 
 ---
 
@@ -626,10 +626,26 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 #### 작업 11. 요약 엔드포인트 진짜 구현
 
+**상태**: 완료 (2026-05-12)
+
 **완료 조건**:
 - `POST /api/v1/patents/{id}/summary` 가 실제 LLM 호출
 - 결과는 캐시에 저장 (30일 TTL)
 - "비즈니스 활용" 섹션도 함께 생성
+
+**구현 내용**:
+- `/api/v1/patents/{id}/summary` 라우터를 mock 직접 호출에서 `SummaryService` 의존성 주입 구조로 변경
+- `SummaryService`에서 summary cache hit 시 KIPRIS/LLM 호출 없이 cached 응답 반환
+- cache miss 시 KIPRIS 상세/청구항 조회 후 LLM Client로 Gemini/OpenAI/mock 요약 생성
+- 요약 결과를 `CACHE_TTL_SUMMARY` 기준으로 SQLite cache에 저장
+- summary 라우터에서 not found/config/upstream 오류를 HTTP 404/503/502로 변환
+- key 없이 실행 가능한 service/API 테스트와 실제 KIPRIS+Gemini live 테스트 추가
+
+**검증 결과**:
+- summary service cache 테스트: `tests/test_summary_service.py` 1개 통과
+- summary API 오류 매핑 테스트: `tests/test_summary_api.py` 4개 통과
+- 기본 전체 테스트: 41개 통과, live 테스트 3개 기본 skip
+- 실제 KIPRIS+Gemini 요약 live 테스트: `RUN_LIVE_KIPRIS=1 RUN_LIVE_LLM=1 pytest tests/test_summary_live.py -m "live_kipris and live_llm" -s` 1개 통과
 
 #### 작업 12. (회의에서 살아남으면) 챗봇 엔드포인트 구현
 
@@ -812,7 +828,7 @@ pytest -m live_llm
   - [x] 작업 8. Query Builder
   - [x] 작업 9. 검색 엔드포인트 진짜 구현
   - [x] 작업 10. LLM Client
-  - [ ] 작업 11. 요약 엔드포인트 진짜 구현
+  - [x] 작업 11. 요약 엔드포인트 진짜 구현
   - [ ] 작업 12. (조건부) 챗봇 엔드포인트
 - [ ] **Phase 3**
   - [ ] 작업 13. Backend Test Suite Consolidation
@@ -847,11 +863,15 @@ pytest -m live_llm
 | 2026-05-12 | 검색 엔드포인트 검증 완료 | SearchService/API/KIPRIS fixture 테스트와 전체 테스트 29개 통과 |
 | 2026-05-12 | 작업 9 검증에 실제 KIPRIS 호출 추가 | `RUN_LIVE_KIPRIS=1`로 실제 KIPRIS Plus API 검색 endpoint 검증을 통과 |
 | 2026-05-12 | LLM Client Gemini live 검증 완료 | 새 Gemini API key로 summary structured output 호출을 성공하고 token usage를 기록 |
+| 2026-05-12 | 요약 엔드포인트 실제 파이프라인 구현 | KIPRIS 상세/청구항 조회, LLM 요약, SQLite summary cache를 `SummaryService`로 연결 |
+| 2026-05-12 | 요약 엔드포인트 live 검증 완료 | 실제 KIPRIS 상세/청구항 조회와 Gemini 요약 호출을 하나의 API 흐름으로 검증 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.17 | 2026-05-12 | 요약 엔드포인트 검증 결과와 작업 11 완료 상태 반영 |
+| v1.16 | 2026-05-12 | 요약 엔드포인트 실제 구현 상태와 검증 예정 항목 반영 |
 | v1.15 | 2026-05-12 | LLM Client 구현 및 실제 Gemini live 검증 결과 반영 |
 | v1.14 | 2026-05-12 | 작업 9 실제 KIPRIS live 검증 결과와 실행 정책 반영 |
 | v1.13 | 2026-05-12 | 검색 엔드포인트 검증 결과와 작업 9 완료 상태 반영 |
@@ -901,11 +921,11 @@ pytest -m live_llm
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~10 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료
 
 **즉시 할 일**:
 1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 Phase 2-B 작업 11 요약 엔드포인트 진짜 구현 시작
+2. 사용자 컨펌 후 작업 12 챗봇 엔드포인트 조건부 진행 또는 Phase 3 진입 결정
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."

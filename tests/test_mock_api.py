@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routers.search import get_search_service
+from app.routers.summary import get_summary_service
 from app.services.mock_llm_client import mock_llm_client
 from app.services.mock_patent_service import mock_patent_service
 
@@ -47,10 +48,14 @@ def test_get_patent_detail():
 
 
 def test_summarize_patent():
-    response = client.post(
-        "/api/v1/patents/10-2023-0098765/summary",
-        json={"user_query": "음식 사진으로 칼로리를 계산하는 배달앱 기능"},
-    )
+    app.dependency_overrides[get_summary_service] = lambda: MockSummaryService()
+    try:
+        response = client.post(
+            "/api/v1/patents/10-2023-0098765/summary",
+            json={"user_query": "음식 사진으로 칼로리를 계산하는 배달앱 기능"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_summary_service, None)
 
     assert response.status_code == 200
     payload = response.json()
@@ -88,3 +93,11 @@ def test_mock_keyword_cases_are_structured():
 class MockSearchService:
     async def search(self, request):
         return mock_patent_service.search(request)
+
+
+class MockSummaryService:
+    async def summarize(self, patent_id, request):
+        patent = mock_patent_service.get_detail(patent_id)
+        if patent is None:
+            return None
+        return mock_llm_client.summarize_patent(patent, request.user_query)
