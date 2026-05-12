@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.routers.search import get_search_service
 from app.services.mock_llm_client import mock_llm_client
+from app.services.mock_patent_service import mock_patent_service
 
 
 client = TestClient(app)
@@ -15,14 +17,18 @@ def test_health_check():
 
 
 def test_search_mock_patents():
-    response = client.post(
-        "/api/v1/search",
-        json={
-            "query": "배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능",
-            "page": 1,
-            "page_size": 10,
-        },
-    )
+    app.dependency_overrides[get_search_service] = lambda: MockSearchService()
+    try:
+        response = client.post(
+            "/api/v1/search",
+            json={
+                "query": "배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능",
+                "page": 1,
+                "page_size": 10,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_search_service, None)
 
     assert response.status_code == 200
     payload = response.json()
@@ -77,3 +83,8 @@ def test_mock_keyword_cases_are_structured():
         assert 3 <= len(extracted.keywords) <= 5
         assert extracted.ipc_codes
         assert set(extracted.keywords) == set(extracted.expanded_terms)
+
+
+class MockSearchService:
+    async def search(self, request):
+        return mock_patent_service.search(request)

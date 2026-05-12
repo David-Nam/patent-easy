@@ -38,6 +38,7 @@ def test_search_patents_maps_fixture_records_and_filters():
             results = await client.search_patents(
                 ["전기자동차", "배터리"],
                 filters=SearchFilters(ipc_codes=["B60L"], year_from=2020),
+                page=2,
                 page_size=5,
             )
         finally:
@@ -53,8 +54,31 @@ def test_search_patents_maps_fixture_records_and_filters():
 
         params = requests[0].url.params
         assert params["word"] == "전기자동차 배터리"
+        assert params["docsStart"] == "6"
         assert params["docsCount"] == "5"
         assert params["accessKey"] == "test-key"
+
+    asyncio.run(run())
+
+
+def test_search_patent_page_returns_total_count_from_fixture():
+    async def run() -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(
+                settings=_settings(kipris_search_path="/search"),
+                http_client=async_client,
+                cache_enabled=False,
+            )
+            search_page = await client.search_patent_page(["자동차"], page=1, page_size=5)
+        finally:
+            await async_client.aclose()
+
+        assert search_page.total_count == 180195
+        assert len(search_page.items) == 5
 
     asyncio.run(run())
 

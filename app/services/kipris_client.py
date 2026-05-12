@@ -38,6 +38,12 @@ class _Endpoint:
     key_param: str
 
 
+@dataclass(frozen=True)
+class PatentSearchPage:
+    items: list[PatentListItem]
+    total_count: int
+
+
 class KIPRISClient:
     def __init__(
         self,
@@ -56,20 +62,36 @@ class KIPRISClient:
         self,
         keywords: list[str],
         filters: SearchFilters | None = None,
+        page: int = 1,
         page_size: int = 10,
     ) -> list[PatentListItem]:
+        search_page = await self.search_patent_page(
+            keywords,
+            filters=filters,
+            page=page,
+            page_size=page_size,
+        )
+        return search_page.items
+
+    async def search_patent_page(
+        self,
+        keywords: list[str],
+        filters: SearchFilters | None = None,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> PatentSearchPage:
         endpoint = _Endpoint(
             path=self.settings.kipris_search_path,
             key_param=self.settings.kipris_openapi_key_param,
         )
         query = " ".join(term.strip() for term in keywords if term.strip())
         if not query:
-            return []
+            return PatentSearchPage(items=[], total_count=0)
 
-        cache_key = self._search_cache_key(keywords, filters, page_size)
-        cached_items = self.cache.get(cache_key) if self.cache is not None else None
-        if cached_items is not None:
-            return [PatentListItem.model_validate(item) for item in cached_items]
+        cache_key = self._search_cache_key(keywords, filters, page, page_size)
+        cached_page = self.cache.get(cache_key) if self.cache is not None else None
+        if cached_page is not None:
+            return _restore_search_page(cached_page)
 
         root = await self._get_xml(
             endpoint,
@@ -77,20 +99,27 @@ class KIPRISClient:
                 "word": query,
                 "patent": "true",
                 "utility": "true",
-                "docsStart": "1",
+                "docsStart": str(((page - 1) * page_size) + 1),
                 "docsCount": str(page_size),
                 "lastvalue": "R",
             },
         )
         items = [_map_search_item(item, index) for index, item in enumerate(_find_all(root, "PatentUtilityInfo"))]
         filtered_items = _apply_filters(items, filters)
+        total_count = _search_total_count(root, fallback=len(items))
+        if _has_filters(filters):
+            total_count = len(filtered_items)
+        search_page = PatentSearchPage(items=filtered_items, total_count=total_count)
         if self.cache is not None:
             self.cache.set(
                 cache_key,
-                [item.model_dump(mode="json") for item in filtered_items],
+                {
+                    "items": [item.model_dump(mode="json") for item in search_page.items],
+                    "total_count": search_page.total_count,
+                },
                 self.settings.cache_ttl_search,
             )
-        return filtered_items
+        return search_page
 
     async def get_patent_detail(self, patent_id: str) -> PatentDetail:
         compact_id = _compact_patent_id(patent_id)
@@ -146,6 +175,7 @@ class KIPRISClient:
         self,
         keywords: list[str],
         filters: SearchFilters | None,
+        page: int,
         page_size: int,
     ) -> str:
         return normalize_cache_key(
@@ -155,6 +185,7 @@ class KIPRISClient:
                 "path": self.settings.kipris_search_path,
                 "keywords": keywords,
                 "filters": filters.model_dump(mode="json") if filters else None,
+                "page": page,
                 "page_size": page_size,
             },
         )
@@ -252,6 +283,46 @@ def _apply_filters(items: list[PatentListItem], filters: SearchFilters | None) -
         filtered = [item for item in filtered if _matches_year_range(item, filters.year_from, filters.year_to)]
 
     return filtered
+
+
+def _has_filters(filters: SearchFilters | None) -> bool:
+    if filters is None:
+        return False
+    return any(
+        [
+            bool(filters.applicant),
+            bool(filters.ipc_codes),
+            filters.year_from is not None,
+            filters.year_to is not None,
+        ]
+    )
+
+
+def _search_total_count(root: ET.Element, fallback: int) -> int:
+    raw_count = _first_text(root, "TotalSearchCount")
+    if raw_count is None:
+        return fallback
+    try:
+        return int(raw_count)
+    except ValueError:
+        return fallback
+
+
+def _restore_search_page(payload: object) -> PatentSearchPage:
+    if isinstance(payload, dict):
+        items = payload.get("items", [])
+        total_count = payload.get("total_count", len(items) if isinstance(items, list) else 0)
+        if isinstance(items, list) and isinstance(total_count, int):
+            return PatentSearchPage(
+                items=[PatentListItem.model_validate(item) for item in items],
+                total_count=total_count,
+            )
+    if isinstance(payload, list):
+        return PatentSearchPage(
+            items=[PatentListItem.model_validate(item) for item in payload],
+            total_count=len(payload),
+        )
+    raise KIPRISParseError("Cached KIPRIS search payload has an invalid shape")
 
 
 def _matches_year_range(item: PatentListItem, year_from: int | None, year_to: int | None) -> bool:

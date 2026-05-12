@@ -2,8 +2,8 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.11
-> **최종 수정일**: 2026-05-08
+> **문서 버전**: v1.14
+> **최종 수정일**: 2026-05-12
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
 ---
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~8 완료. 다음 작업은 Phase 2-B 작업 9 검색 엔드포인트 진짜 구현.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~9 완료. 다음 작업은 Phase 2-B 작업 10 LLM Client 구현.
 
 ---
 
@@ -560,6 +560,8 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 #### 작업 9. 검색 엔드포인트 진짜 구현
 
+**상태**: 완료 (2026-05-12)
+
 **완료 조건**:
 - `POST /api/v1/search` 가 실제로 작동:
   ```
@@ -567,6 +569,25 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
   ```
 - 응답 시간 목표: 캐시 히트 1초, 미스 5~10초
 - E2E 테스트 5개 시나리오 통과
+
+**구현 내용**:
+- `/api/v1/search` 라우터를 mock service 직접 호출에서 `SearchService` 의존성 주입 구조로 변경
+- `SearchService`에서 Query Builder 결과를 KIPRIS Client 검색 요청으로 연결
+- KIPRIS 검색에 `page` 기반 `docsStart` 계산과 `TotalSearchCount` 파싱 추가
+- 검색 라우터에서 provider/config/upstream 오류를 HTTP 503/502로 변환
+- key 없이 실행 가능한 service/API/KIPRIS fixture 테스트 추가
+
+**검증 결과**:
+- 검색 service 단위 테스트: `tests/test_search_service.py` 1개 통과
+- 검색 API 오류 매핑 테스트: `tests/test_search_api.py` 2개 통과
+- KIPRIS client pagination/total count fixture 테스트: `tests/test_kipris_client.py` 8개 통과
+- 실제 KIPRIS API 검색 엔드포인트 live 테스트: `RUN_LIVE_KIPRIS=1 pytest tests/test_search_live.py -m live_kipris -s` 1개 통과
+- 전체 테스트: 29개 통과, live 테스트 1개 기본 skip
+
+**live 검증 정책**:
+- 개발 단계에서는 KIPRIS 무료 호출 한도 내에서 실제 KIPRIS API 검증을 적극 사용
+- 기본 `pytest`는 외부 API를 호출하지 않음
+- 실제 KIPRIS 호출 검증은 `RUN_LIVE_KIPRIS=1`과 `-m live_kipris`를 명시해 실행
 
 #### 작업 10. LLM Client 구현 (Gemini 기본·OpenAI 전환)
 
@@ -766,7 +787,7 @@ pytest -m live_llm
   - [x] 작업 6. KIPRIS Client
   - [x] 작업 7. Cache Layer
   - [x] 작업 8. Query Builder
-  - [ ] 작업 9. 검색 엔드포인트 진짜 구현
+  - [x] 작업 9. 검색 엔드포인트 진짜 구현
   - [ ] 작업 10. LLM Client
   - [ ] 작업 11. 요약 엔드포인트 진짜 구현
   - [ ] 작업 12. (조건부) 챗봇 엔드포인트
@@ -799,11 +820,17 @@ pytest -m live_llm
 | 2026-05-08 | 기능별 테스트는 각 작업 안에서 작성 | Phase 3는 테스트를 처음 만드는 단계가 아니라 배포 전 통합 검증 단계 |
 | 2026-05-08 | Cache Layer 구현 및 KIPRIS Client 연결 완료 | KIPRIS 호출 절약을 위해 검색/상세 결과를 SQLite TTL cache에 저장 |
 | 2026-05-08 | Query Builder provider abstraction 구현 완료 | Gemini 기본, OpenAI 전환, Mock fallback을 동일 `ExtractedQuery` 스키마로 유지 |
+| 2026-05-12 | 검색 엔드포인트 실제 검색 파이프라인 구현 | `/search`를 Query Builder와 KIPRIS Client 조합으로 전환하고 mock 의존성은 테스트 override로 격리 |
+| 2026-05-12 | 검색 엔드포인트 검증 완료 | SearchService/API/KIPRIS fixture 테스트와 전체 테스트 29개 통과 |
+| 2026-05-12 | 작업 9 검증에 실제 KIPRIS 호출 추가 | `RUN_LIVE_KIPRIS=1`로 실제 KIPRIS Plus API 검색 endpoint 검증을 통과 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.14 | 2026-05-12 | 작업 9 실제 KIPRIS live 검증 결과와 실행 정책 반영 |
+| v1.13 | 2026-05-12 | 검색 엔드포인트 검증 결과와 작업 9 완료 상태 반영 |
+| v1.12 | 2026-05-12 | 검색 엔드포인트 실제 구현 상태와 검증 예정 항목 반영 |
 | v1.11 | 2026-05-08 | Query Builder 완료 상태와 검증 결과 반영 |
 | v1.10 | 2026-05-08 | Cache Layer 완료 상태와 검증 결과 반영 |
 | v1.9 | 2026-05-08 | 기능별 테스트 작성 시점과 Phase 3 통합 검증 역할 명확화 |
@@ -849,12 +876,11 @@ pytest -m live_llm
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~9 완료
 
 **즉시 할 일**:
-1. Phase 2-B 작업 9 검색 엔드포인트 진짜 구현
-2. 작업 9 완료 후 구현 요약과 검증 방법 보고
-3. 사용자 컨펌 후 검색 API 통합 테스트와 전체 테스트 실행
+1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
+2. 사용자 컨펌 후 Phase 2-B 작업 10 LLM Client 구현 시작
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."
