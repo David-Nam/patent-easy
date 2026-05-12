@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.14
+> **문서 버전**: v1.15
 > **최종 수정일**: 2026-05-12
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~9 완료. 다음 작업은 Phase 2-B 작업 10 LLM Client 구현.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~10 완료. 다음 작업은 Phase 2-B 작업 11 요약 엔드포인트 진짜 구현.
 
 ---
 
@@ -591,15 +591,38 @@ async def search_patents(keywords: list[str], ...) -> list[PatentListItem]:
 
 #### 작업 10. LLM Client 구현 (Gemini 기본·OpenAI 전환)
 
+**상태**: 완료 (2026-05-12)
+
 **완료 조건**:
 - `app/services/llm_client.py` 작성
 - Gemini adapter를 기본 구현으로 작성
 - OpenAI adapter를 같은 인터페이스로 추가 또는 교체 가능하게 설계
 - 메서드:
-  - `summarize_patent(claims: list[Claim], user_query: str | None) -> SummaryResponse`
+  - `summarize_patent(patent: PatentDetail, user_query: str | None) -> SummaryResponse`
   - `rerank_results(query: str, results: list[PatentListItem]) -> list[PatentListItem]`
 - 비용 추적 (토큰 수 로깅)
 - 환각 방지: 청구항 원문을 컨텍스트에 명시적으로 포함
+
+**구현 내용**:
+- `app/services/llm_client.py` 작성
+- `LLM_PROVIDER=gemini|openai|mock` 기반 provider 선택
+- Gemini adapter는 REST `generateContent`와 `responseJsonSchema` structured output 사용
+- OpenAI adapter는 chat completions JSON mode 사용
+- 요약 프롬프트와 재정렬 프롬프트 분리:
+  - `app/prompts/summarize_patent.txt`
+  - `app/prompts/rerank_results.txt`
+- provider 응답 JSON 파싱 실패 또는 schema 검증 실패 시 최대 2회 재시도
+- Gemini/OpenAI token usage를 `last_token_usage`와 logger로 기록
+- 요약 프롬프트에 청구항 원문을 명시적으로 포함하여 환각을 줄이는 구조 적용
+
+**검증 결과**:
+- LLM Client 단위 테스트: `tests/test_llm_client.py` 7개 통과
+- 실제 Gemini API live 테스트: `RUN_LIVE_LLM=1 pytest tests/test_llm_client_live.py -m live_llm -s` 1개 통과
+- 전체 테스트: 36개 통과, live 테스트 2개 기본 skip
+
+**live 검증 정책**:
+- 기본 `pytest`는 외부 LLM API를 호출하지 않음
+- 실제 Gemini 호출 검증은 `RUN_LIVE_LLM=1`과 `-m live_llm`를 명시해 실행
 
 #### 작업 11. 요약 엔드포인트 진짜 구현
 
@@ -788,7 +811,7 @@ pytest -m live_llm
   - [x] 작업 7. Cache Layer
   - [x] 작업 8. Query Builder
   - [x] 작업 9. 검색 엔드포인트 진짜 구현
-  - [ ] 작업 10. LLM Client
+  - [x] 작업 10. LLM Client
   - [ ] 작업 11. 요약 엔드포인트 진짜 구현
   - [ ] 작업 12. (조건부) 챗봇 엔드포인트
 - [ ] **Phase 3**
@@ -823,11 +846,13 @@ pytest -m live_llm
 | 2026-05-12 | 검색 엔드포인트 실제 검색 파이프라인 구현 | `/search`를 Query Builder와 KIPRIS Client 조합으로 전환하고 mock 의존성은 테스트 override로 격리 |
 | 2026-05-12 | 검색 엔드포인트 검증 완료 | SearchService/API/KIPRIS fixture 테스트와 전체 테스트 29개 통과 |
 | 2026-05-12 | 작업 9 검증에 실제 KIPRIS 호출 추가 | `RUN_LIVE_KIPRIS=1`로 실제 KIPRIS Plus API 검색 endpoint 검증을 통과 |
+| 2026-05-12 | LLM Client Gemini live 검증 완료 | 새 Gemini API key로 summary structured output 호출을 성공하고 token usage를 기록 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.15 | 2026-05-12 | LLM Client 구현 및 실제 Gemini live 검증 결과 반영 |
 | v1.14 | 2026-05-12 | 작업 9 실제 KIPRIS live 검증 결과와 실행 정책 반영 |
 | v1.13 | 2026-05-12 | 검색 엔드포인트 검증 결과와 작업 9 완료 상태 반영 |
 | v1.12 | 2026-05-12 | 검색 엔드포인트 실제 구현 상태와 검증 예정 항목 반영 |
@@ -876,11 +901,11 @@ pytest -m live_llm
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~9 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~10 완료
 
 **즉시 할 일**:
 1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 Phase 2-B 작업 10 LLM Client 구현 시작
+2. 사용자 컨펌 후 Phase 2-B 작업 11 요약 엔드포인트 진짜 구현 시작
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."

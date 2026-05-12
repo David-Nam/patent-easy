@@ -10,4 +10,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "live_kipris: tests that call the real KIPRIS Plus API and require KIPRIS_API_KEY",
+    "live_llm: tests that call a real LLM provider API and require provider API keys",
 ]
