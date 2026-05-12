@@ -25,7 +25,15 @@ def get_summary_service() -> SummaryService:
     return SummaryService()
 
 
-@router.post("/patents/{patent_id}/summary", response_model=SummaryResponse)
+@router.post(
+    "/patents/{patent_id}/summary",
+    response_model=SummaryResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Patent not found"},
+        status.HTTP_502_BAD_GATEWAY: {"description": "KIPRIS or LLM upstream error"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "Summary provider configuration error"},
+    },
+)
 async def summarize_patent(
     patent_id: str,
     request: SummaryRequest,

@@ -1,83 +1,159 @@
-# KIPRIS Plus API Research
+# KIPRIS Plus API 조사 결과
 
-Last verification run: `2026-05-06T23:38:58.341158+00:00`
+마지막 검증 실행 시각: `2026-05-06T23:38:58.341158+00:00`
 
-## Verification Policy
+이 문서는 PatentEasy 백엔드에서 사용하는 KIPRIS Plus API endpoint, key parameter, 응답 필드, fixture 위치를 정리합니다.
 
-- KIPRIS Plus API must be verified with a real `KIPRIS_API_KEY` before implementing the real `KIPRISClient`.
-- Raw responses are saved exactly as received under `tests/fixtures/kipris_raw/`.
-- Normalized JSON is generated under `tests/fixtures/kipris_normalized/` only to make field review easier.
-- LLM provider keys are not required for this verification.
+## 검증 정책
 
-## Endpoints Checked
+- 실제 검색 로직 구현 전 `KIPRIS_API_KEY`로 최소 호출을 검증합니다.
+- raw 응답은 원본 XML/JSON 그대로 `tests/fixtures/kipris_raw/`에 저장합니다.
+- 사람이 필드를 검토하기 쉬운 normalized JSON은 `tests/fixtures/kipris_normalized/`에 저장합니다.
+- LLM provider key는 KIPRIS 검증에 필요하지 않습니다.
+- broad test나 반복 live test는 KIPRIS 호출 한도를 소모하므로 필요한 경우에만 실행합니다.
 
-Endpoint note: OpenAPI endpoints use `accessKey`, while the
-bibliography detail endpoint uses `/kipo-api/kipi/...` with `ServiceKey`.
+## 핵심 결론
 
-### free_search
+| 구분 | endpoint | key parameter | 응답 형식 | 구현 상태 |
+|---|---|---|---|---|
+| 자유검색 | `/openapi/rest/patUtiModInfoSearchSevice/freeSearchInfo` | `accessKey` | XML | 구현 완료 |
+| 서지 상세 | `/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch` | `ServiceKey` | XML | 구현 완료 |
+| 청구항 상세 | `/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo` | `accessKey` | XML | 구현 완료 |
 
-- Path: `/openapi/rest/patUtiModInfoSearchSevice/freeSearchInfo`
-- HTTP status: `200`
-- Body format: `xml`
-- Raw fixture: `tests/fixtures/kipris_raw/free_search_20260506T233857Z.xml`
-- Extracted records: `5`
-- First application number: `1020230147601`
+주의할 점은 자유검색/청구항 endpoint는 `accessKey`를 사용하고, 서지 상세 endpoint는 `/kipo-api/kipi/...` 경로와 `ServiceKey`를 사용한다는 점입니다.
 
-Sample normalized record:
+## 환경변수 매핑
 
-```json
-{
-  "patent_id": "1020230147601",
-  "title": "전기자동차의 배터리 열관리 시스템 및 이의 운용 방법",
-  "applicant": "서울대학교산학협력단",
-  "application_date": "20231031",
-  "registration_date": "20260429",
-  "abstract": "본 발명에 따른 전기자동차의 배터리 열관리 시스템 및 이의 운용 방법은, 초기 온도와 주행 데이터에 따라 최적의 배터리 열관리 모드를 도출하도록 구성됨으로써, 배터리의 성능과 수명을 보다 효율적으로 관리할 수 있는 이점이 있다. 또한, 본 발명에서는 전기자동차 에너지 모델을 이용하여 전기자동차의 소모 전력량을 산출하고, 배터리 에너지 모델을 이용하여 배터리의 전압 변화와 배터리의 소모 에너지를 산출함으로써, 히트펌프의 열 거동에 따른 소모 전력량과 배터리의 열과 전기화학 거동에 따른 소모 전력량을 모두 고려하여 최적의 배터리 열관리 모드를 도출할 수 있으므로, 차실 난방과 배터리 열관리를 보다 효과적으로 수행할 수 있다. 또한, 전기자동차의 가상 주행시 배터리의 전압이 컷 오프 전압에 도달하는지 여부를 미리 예측하여, 배터리의 전압이 컷 오프 전압에 도달한다고 판단되면, 주행 가능 거리가 최대인 배터리 열관리 모드로 작동시킴으로써, 겨울철 전기자동차의 주행 가능 거리가 감소하는 현상을 방지할 수 있다."
-}
+```env
+KIPRIS_BASE_URL=http://plus.kipris.or.kr
+KIPRIS_OPENAPI_KEY_PARAM=accessKey
+KIPRIS_DETAIL_KEY_PARAM=ServiceKey
+KIPRIS_SEARCH_PATH=/openapi/rest/patUtiModInfoSearchSevice/freeSearchInfo
+KIPRIS_DETAIL_PATH=/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch
+KIPRIS_CLAIM_PATH=/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo
 ```
 
-### bibliography_detail
+## 자유검색
 
-- Path: `/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch`
-- HTTP status: `200`
-- Body format: `xml`
-- Raw fixture: `tests/fixtures/kipris_raw/bibliography_detail_20260506T233858Z.xml`
-- Extracted records: `10`
-- First application number: `10-2023-0147601`
+| 항목 | 값 |
+|---|---|
+| path | `/openapi/rest/patUtiModInfoSearchSevice/freeSearchInfo` |
+| key parameter | `accessKey` |
+| 검증 HTTP status | `200` |
+| 응답 형식 | XML |
+| raw fixture | `tests/fixtures/kipris_raw/free_search_20260506T233857Z.xml` |
+| normalized fixture | `tests/fixtures/kipris_normalized/free_search_20260506T233857Z.json` |
+| 추출 record 수 | 5 |
+| 첫 application number | `1020230147601` |
 
-Sample normalized record:
+주요 request parameter:
 
-```json
-{
-  "patent_id": "10-2023-0147601",
-  "title": "전기자동차의 배터리 열관리 시스템 및 이의 운용 방법",
-  "application_date": "2023.10.31",
-  "publication_date": "2025.05.09",
-  "registration_date": "2026.04.29",
-  "legal_status": "등록결정(일반)"
-}
+| parameter | 설명 |
+|---|---|
+| `word` | 검색어 |
+| `patent` | 특허 포함 여부 |
+| `utility` | 실용신안 포함 여부 |
+| `docsStart` | 검색 시작 번호 |
+| `docsCount` | 조회 개수 |
+| `lastvalue` | 정렬/검색 옵션, 현재 `R` 사용 |
+
+백엔드 매핑:
+
+| KIPRIS XML field | backend field |
+|---|---|
+| `ApplicationNumber` | `PatentListItem.patent_id` |
+| `InventionName` | `PatentListItem.title` |
+| `Applicant` | `PatentListItem.applicant` |
+| `ApplicationDate` | `PatentListItem.application_date` |
+| `InternationalpatentclassificationNumber` | `PatentListItem.ipc_codes` |
+| `Abstract` | `PatentListItem.abstract_preview` |
+| `TotalSearchCount` | `SearchResponse.pagination.total_count` |
+
+## 서지 상세
+
+| 항목 | 값 |
+|---|---|
+| path | `/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch` |
+| key parameter | `ServiceKey` |
+| 검증 HTTP status | `200` |
+| 응답 형식 | XML |
+| raw fixture | `tests/fixtures/kipris_raw/bibliography_detail_20260506T233858Z.xml` |
+| normalized fixture | `tests/fixtures/kipris_normalized/bibliography_detail_20260506T233858Z.json` |
+| 첫 application number | `10-2023-0147601` |
+
+백엔드 매핑:
+
+| KIPRIS XML field | backend field |
+|---|---|
+| `biblioSummaryInfo.applicationNumber` | `PatentDetail.patent_id` |
+| `biblioSummaryInfo.inventionTitle` | `PatentDetail.title` |
+| `biblioSummaryInfo.applicationDate` | `PatentDetail.application_date` |
+| `biblioSummaryInfo.openDate` | `PatentDetail.publication_date` |
+| `biblioSummaryInfo.registerDate` | `PatentDetail.registration_date` |
+| `biblioSummaryInfo.finalDisposal` / `registerStatus` | `PatentDetail.legal_status` |
+| `applicantInfo.name` | `PatentDetail.applicant` |
+| `inventorInfo.name` | `PatentDetail.inventors` |
+| `ipcInfo.ipcNumber` | `PatentDetail.ipc_codes` |
+| `astrtCont` | `PatentDetail.abstract` |
+
+## 청구항 상세
+
+| 항목 | 값 |
+|---|---|
+| path | `/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo` |
+| key parameter | `accessKey` |
+| 검증 HTTP status | `200` |
+| 응답 형식 | XML |
+| raw fixture | `tests/fixtures/kipris_raw/claim_detail_20260506T233858Z.xml` |
+| normalized fixture | `tests/fixtures/kipris_normalized/claim_detail_20260506T233858Z.json` |
+
+백엔드 매핑:
+
+| KIPRIS XML field | backend field |
+|---|---|
+| `claimInfo.claim` | `PatentDetail.claims[].text` |
+
+청구항 번호는 청구항 text 앞의 `1.`, `2.` 패턴에서 추출하고, 패턴이 없으면 응답 순서를 fallback으로 사용합니다.
+
+## 구현 파일
+
+| 파일 | 역할 |
+|---|---|
+| `scripts/verify_kipris_api.py` | 실제 KIPRIS 최소 호출, raw/normalized fixture 생성 |
+| `app/services/kipris_client.py` | KIPRIS 검색/상세/청구항 client |
+| `tests/test_kipris_client.py` | fixture 기반 파싱, cache, pagination 테스트 |
+| `tests/test_search_live.py` | 실제 KIPRIS 검색 endpoint live 테스트 |
+| `tests/test_summary_live.py` | 실제 KIPRIS 상세/청구항 + Gemini 요약 live 테스트 |
+
+## 재검증 명령
+
+fixture 재생성:
+
+```bash
+venv/bin/python scripts/verify_kipris_api.py
 ```
 
-### claim_detail
+offline fixture 테스트:
 
-- Path: `/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo`
-- HTTP status: `200`
-- Body format: `xml`
-- Raw fixture: `tests/fixtures/kipris_raw/claim_detail_20260506T233858Z.xml`
-- Extracted records: `10`
-- First application number: `not found`
-
-Sample normalized record:
-
-```json
-{
-  "claim": "1. 전기자동차에 동력을 제공하는 배터리와;압축기, 응축기, 팽창밸브 및 증발기를 포함하는 히트펌프와;상기 응축기에서 가열된 냉각수와 차실로 유입되는 공기를 열교환시켜, 차실을 난방시키기 위한 실내 열교환기와;상기 응축기와 상기 실내 열교환기를 연결하여, 미리 설정된 복수의 배터리 열관리 모드들 중에서 상기 히트펌프의 열원을 상기 배터리에 사용하지 않는 배터리 자가발열 모드시, 상기 응축기에서 가열된 냉각수를 상기 실내 열교환기로 안내하기 위한 응축기 토출유로와;상기 응축기와 상기 배터리를 연결하여, 상기 복수의 배터리 열관리 모드들 중에서 상기 히트펌프의 열원을 상기 배터리의 가열에 이용하는 배터리 능동가열 모드시, 상기 응축기에서 가열된 냉각수 중 적어도 일부를 상기 배터리로 공급하여 상기 배터리를 가열한 후 상기 응축기로 순환시키기 위한 배터리 가열 유로와; 상기 증발기와 상기 배터리를 연결하여, 상기 복수의 배터리 열관리 모드 중에서 상기 배터리의 열원을 상기 히트펌프의 열원으로 이용하는 배터리 열회수 모드시, 상기 증발기에서 냉각된 냉각수 중 적어도 일부를 상기 배터리로 공급하여 상기 배터리의 열원을 흡수한 후 상기 증발기로 순환시키기 위한 배터리 열회수 유로와;상기 배터리 가열 유로를 개폐하는 배터리 가열 밸브와;상기 배터리 열회수 유로를 개폐하는 배터리 열회수 밸브와;상기 전기자동차의 주행이 시작되면, 외기 온도, 배터리 온도, 전장부품 온도, 차실 온도 및 배터리 충전량을 포함한 초기 데이터를 수집하는 초기 데이터 수집부와;출발지로부터 목적지까지 가상 주행시 주행 속도와 주행 시간을 포함한 주행 데이터를 예측하여 산출하는 주행 데이터 산출부와;상기 전기자동차가 상기 목적지까지 상기 가상 주행시 상기 초기 데이터와 상기 주행 데이터에 따른 상기 배터리의 전압 변화, 상기 배터리 열관리 모드별 주행 가능 거리, 상기 배터리 열관리 모드별 상기 배터리의 소모 에너지를 포함한 배터리 데이터를 예측하여 산출하는 배터리 데이터 산출부와;상기 배터리의 전압 변화로부터 상기 배터리의 전압이 미리 설정된 컷 오프 전압에 도달하는지 여부를 판단하고, 상기 배터리의 전압이 상기 컷 오프 전압에 도달한다고 판단되면, 상기 배터리 열관리 모드들 중에서 상기 주행 가능 거리가 최대인 배터리 열관리 모드를 최적 배터리 열관리 모드로 도출하고, 도출된 최적 배터리 열관리 모드에 따라 상기 배터리 가열 밸브와 상기 배터리 열회수 밸브를 선택적으로 개폐시키는 제어부를 포함하고,상기 배터리 데이터 산출부는,상기 초기 데이터와 상기 주행 데이터에 따라 상기 전기자동차에서 소모되는 전력 소모량을 산출하도록 미리 구축된 수학적 모델인 전기자동차 에너지 모델과,상기 초기 데이터, 상기 주행 데이터 및 상기 전력 소모량에 따라 상기 배터리의 전압 변화와 상기 배터리의 소모 에너지를 산출하도록 미리 구축된 수학적 모델인 배터리 에너지 모델을 사용하고,상기 전력 소모량은, 상기 전기자동차 에너지 모델에 상기 초기 데이터와 상기 주행 데이터를 입력하면 산출되고,상기 배터리의 전압 변화는, 상기 배터리 에너지 모델에 상기 초기 데이터, 상기 주행 데이터 및 상기 전력 소모량을 입력하여면산출되고,상기 배터리 열관리 모드별 주행 가능 거리는, 상기 배터리의 전압 변화에 따라 산출되고,상기 배터리의 소모 에너지는, 상기 배터리 에너지 모델에 상기 초기 데이터, 상기 주행 데이터 및 상기 전력 소모량을 입력하면 산출되는,전기자동차의 배터리 열관리 시스템."
-}
+```bash
+venv/bin/python -m pytest tests/test_kipris_client.py
 ```
 
-## Next Review Checklist
+실제 KIPRIS 검색 live 테스트:
 
-- Confirm exact field names for application number, title, applicant, dates, legal status, abstract, claims, and IPC.
-- Confirm whether the response contract is XML-only or varies by endpoint.
-- Confirm the actual call quota from the KIPRIS Plus account page before running broad tests.
-- Update `app/services/kipris_client.py` only after the raw fixtures have been reviewed.
+```bash
+RUN_LIVE_KIPRIS=1 venv/bin/python -m pytest tests/test_search_live.py -m live_kipris -s
+```
+
+실제 KIPRIS + Gemini 요약 live 테스트:
+
+```bash
+RUN_LIVE_KIPRIS=1 RUN_LIVE_LLM=1 \
+venv/bin/python -m pytest tests/test_summary_live.py -m "live_kipris and live_llm" -s
+```
+
+## 남은 확인 사항
+
+- KIPRIS Plus 계정 화면에서 실제 일 호출 한도와 서비스별 제한을 주기적으로 확인합니다.
+- KIPRIS 응답 XML field가 변경될 경우 `scripts/verify_kipris_api.py`로 fixture를 다시 생성합니다.
+- 검색 결과의 relevance score는 현재 KIPRIS 응답 순서 기반 임시 점수입니다. LLM reranking 또는 별도 평가 지표를 적용하면 이 문서에 반영합니다.

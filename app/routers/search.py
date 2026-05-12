@@ -25,7 +25,14 @@ def get_search_service() -> SearchService:
     return SearchService()
 
 
-@router.post("/search", response_model=SearchResponse)
+@router.post(
+    "/search",
+    response_model=SearchResponse,
+    responses={
+        status.HTTP_502_BAD_GATEWAY: {"description": "KIPRIS or LLM upstream error"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"description": "Search provider configuration error"},
+    },
+)
 async def search_patents(
     request: SearchRequest,
     service: Annotated[SearchService, Depends(get_search_service)],
