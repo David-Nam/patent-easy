@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.23
+> **문서 버전**: v1.25
 > **최종 수정일**: 2026-05-13
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~15 완료. 다음 작업은 Phase 3 작업 16 Backend Evaluation Script.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. 다음 작업은 Phase 4 작업 17 Production Runtime Configuration.
 
 ---
 
@@ -764,6 +764,8 @@ pytest
 
 #### 작업 16. Backend Evaluation Script
 
+**상태**: 완료 (2026-05-13)
+
 **완료 조건**:
 - `data/eval_queries.json`에 10~20개 자연어 쿼리 작성
 - 각 쿼리의 기대 키워드, IPC 후보, 관련 특허 후보를 수동 라벨링
@@ -774,6 +776,34 @@ pytest
 **산출물**:
 - `scripts/benchmark.py`
 - `docs/backend_evaluation_report.md`
+
+**구현 내용**:
+- `data/eval_queries.json`을 10개 평가 케이스로 확장
+- 평가 케이스별 기대 키워드, IPC 후보, 관련 특허 후보 수동 라벨링
+- mock/local corpus 평가를 위해 `data/mock_patents.json`에 도메인별 mock 특허 보강
+- `scripts/benchmark.py`에서 mock/real mode, cache on/off, mock/Gemini/OpenAI provider 옵션 지원
+- Precision@10, Recall@10, keyword recall, IPC recall, latency, KIPRIS/LLM call count 산출
+- real KIPRIS 또는 real LLM 호출은 `--allow-live` 없이는 실행되지 않도록 보호
+- `docs/backend_evaluation_report.md`에 평가 데이터셋, 실행 방법, 지표 해석 기준 문서화
+- README와 backend test plan에서 benchmark 실행 가이드 연결
+
+**검증 예정 명령**:
+```bash
+venv/bin/python -m pytest tests/test_benchmark.py tests/test_query_builder.py tests/test_mock_api.py
+venv/bin/python scripts/benchmark.py --mode mock --cache off
+venv/bin/python -m pytest
+```
+
+**검증 결과**:
+- 표적 benchmark 테스트: `venv/bin/python -m pytest tests/test_benchmark.py tests/test_query_builder.py tests/test_mock_api.py` 18개 통과
+- mock benchmark CLI: `venv/bin/python scripts/benchmark.py --mode mock --cache off` 실행 성공
+  - `query_count=10`
+  - `mean_recall_at_10=1.0`
+  - `mean_keyword_recall=1.0`
+  - `mean_ipc_recall=1.0`
+  - `kipris_call_count=0`
+  - `llm_call_count=10`
+- 전체 offline 테스트: `venv/bin/python -m pytest` 67개 통과, live 테스트 3개 skip
 
 ---
 
@@ -895,7 +925,7 @@ pytest
   - [x] 작업 13. Backend Test Suite Consolidation
   - [x] 작업 14. Backend Error Handling Hardening
   - [x] 작업 15. Observability & Runtime Guardrails
-  - [ ] 작업 16. Backend Evaluation Script
+  - [x] 작업 16. Backend Evaluation Script
 - [ ] **Phase 4**
   - [ ] 작업 17. Production Runtime Configuration
   - [ ] 작업 18. Deploy Backend Server
@@ -933,11 +963,15 @@ pytest
 | 2026-05-13 | Backend Error Handling Hardening 검증 완료 | 표적 에러 처리 테스트 28개와 전체 offline 테스트 55개 통과 |
 | 2026-05-13 | Observability & Runtime Guardrails 구현 | request latency, readiness, cache/KIPRIS/LLM 로그를 추가하고 민감 정보 로그 노출을 제한 |
 | 2026-05-13 | Observability & Runtime Guardrails 검증 완료 | 표적 관측성 테스트 41개와 전체 offline 테스트 64개 통과 |
+| 2026-05-13 | Backend Evaluation Script 구현 | 평가 쿼리, benchmark script, 검색 품질 평가 문서를 추가 |
+| 2026-05-13 | Backend Evaluation Script 검증 완료 | 표적 benchmark 테스트 18개, mock benchmark CLI, 전체 offline 테스트 67개 통과 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.25 | 2026-05-13 | 작업 16 검증 결과와 완료 상태 반영 |
+| v1.24 | 2026-05-13 | 작업 16 benchmark 구현 상태와 검증 예정 항목 반영 |
 | v1.23 | 2026-05-13 | 작업 15 검증 결과와 완료 상태 반영 |
 | v1.22 | 2026-05-13 | 작업 15 관측성·runtime guardrail 구현 상태와 검증 예정 항목 반영 |
 | v1.21 | 2026-05-13 | 작업 14 검증 결과와 완료 상태 반영 |
@@ -995,11 +1029,11 @@ pytest
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~15 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료
 
 **즉시 할 일**:
 1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 작업 16 Backend Evaluation Script 진행
+2. 사용자 컨펌 후 Phase 4 작업 17 Production Runtime Configuration 진행
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."

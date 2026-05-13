@@ -131,12 +131,24 @@ venv/bin/python scripts/run_quality_gate.py --live-llm
 venv/bin/python scripts/run_quality_gate.py --live-kipris --live-llm --live-summary
 ```
 
+## 검색 품질 평가
+
+기본 benchmark는 외부 API를 호출하지 않고 mock/local corpus로 실행됩니다.
+
+```bash
+venv/bin/python scripts/benchmark.py --mode mock --cache off
+```
+
+실제 KIPRIS 또는 Gemini/OpenAI를 호출하는 benchmark는 `--allow-live`를 명시해야 합니다.
+평가 데이터와 지표 해석은 `docs/backend_evaluation_report.md`에 정리되어 있습니다.
+
 ## 참고 문서
 
 | 문서 | 설명 |
 |---|---|
 | `DEVELOPMENT_PLAN.md` | 전체 개발 계획과 작업 진행 상태 |
 | `docs/backend_test_plan.md` | 백엔드 테스트 및 품질 게이트 |
+| `docs/backend_evaluation_report.md` | 검색 품질 평가 방법과 benchmark 실행 가이드 |
 | `docs/kipris_api_research.md` | KIPRIS Plus API 검증 결과 |
 | `docs/keyword_prompt_design.md` | 키워드 추출 프롬프트 설계 |
 | `docs/frontend_mock_api_guide.md` | 프론트엔드 연동 가이드 |

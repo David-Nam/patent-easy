@@ -69,6 +69,160 @@
           "text": "사용자의 주문 이력과 현재 위치를 기반으로 후보 매장을 산출하고, 선호도 점수에 따라 후보 매장을 정렬하는 방법."
         }
       ]
+    },
+    {
+      "patent_id": "10-2024-0001122",
+      "title": "전기차 충전소 혼잡도 예측 및 추천 시스템",
+      "applicant": "현대자동차",
+      "application_date": "2024-01-18",
+      "ipc_codes": ["B60L 53/66", "G06Q 50/06", "G06N 20/00"],
+      "relevance_score": 76,
+      "tags": ["전기차", "충전소", "혼잡도", "추천"],
+      "abstract_preview": "차량 위치와 충전소 사용 이력을 이용해 충전 가능 여부와 대기 시간을 예측합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 전기차 위치, 배터리 잔량, 충전소 사용 이력 및 실시간 상태를 기반으로 최적 충전소를 추천하는 시스템에 관한 것이다.",
+      "inventors": ["강민재"],
+      "publication_date": "2024-09-10",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "전기차의 현재 위치와 충전소별 사용 상태를 수집하고 충전 대기 시간을 예측하여 추천 충전소를 결정하는 방법."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2023-0077777",
+      "title": "중고차 이미지 및 보험 이력 기반 자동 상담 시스템",
+      "applicant": "카머스",
+      "application_date": "2023-06-30",
+      "ipc_codes": ["G06Q 30/06", "G06V 10/70", "G06F 40/35"],
+      "relevance_score": 75,
+      "tags": ["중고차", "보험이력", "이미지분석", "상담자동화"],
+      "abstract_preview": "차량 사진과 사고 이력을 분석해 중고차 상태와 수출 상담 답변을 생성합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 중고차 외관 이미지, 보험 사고 이력, 정비 기록을 통합 분석하여 차량 상태를 평가하고 상담 문구를 생성하는 시스템에 관한 것이다.",
+      "inventors": ["오지환"],
+      "publication_date": "2024-01-22",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "차량 이미지와 보험 이력 데이터를 입력받아 차량 상태 점수를 산출하고 상담 응답 텍스트를 생성하는 시스템."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2022-0088888",
+      "title": "운동 자세 인식 기반 홈트레이닝 피드백 장치",
+      "applicant": "LG전자",
+      "application_date": "2022-09-14",
+      "ipc_codes": ["G06V 40/20", "G06N 3/08", "A63B 24/00"],
+      "relevance_score": 74,
+      "tags": ["홈트레이닝", "자세인식", "피드백", "스마트거울"],
+      "abstract_preview": "사용자의 관절 위치와 운동 동작을 분석해 잘못된 자세를 실시간으로 안내합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 카메라 영상에서 사용자의 관절 위치를 추정하고 운동 자세를 평가하여 화면 또는 음성으로 피드백을 제공하는 장치에 관한 것이다.",
+      "inventors": ["임서연"],
+      "publication_date": "2023-04-03",
+      "registration_date": "2025-02-17",
+      "legal_status": "등록",
+      "claims": [
+        {
+          "number": 1,
+          "text": "사용자 영상을 분석하여 기준 운동 자세와 비교하고 차이가 있는 관절 부위에 대한 피드백을 제공하는 방법."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2024-0023456",
+      "title": "웨어러블 센서 기반 낙상 감지 및 보호자 알림 장치",
+      "applicant": "바이오헬스케어",
+      "application_date": "2024-03-05",
+      "ipc_codes": ["A61B 5/11", "G08B 21/04", "H04W 4/90"],
+      "relevance_score": 73,
+      "tags": ["낙상감지", "웨어러블", "보호자알림", "헬스케어"],
+      "abstract_preview": "착용형 센서로 이상 움직임을 감지하고 보호자 단말에 위치와 알림을 전송합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 가속도 센서와 자이로 센서의 움직임 패턴을 분석하여 낙상 여부를 판단하고 보호자에게 응급 알림을 전송하는 장치에 관한 것이다.",
+      "inventors": ["한유진"],
+      "publication_date": "2024-11-02",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "웨어러블 단말의 센서 신호를 이용해 낙상을 감지하고 보호자 단말로 알림과 위치 정보를 전송하는 방법."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2021-0067890",
+      "title": "차량 앞유리 증강현실 주행 정보 표시 시스템",
+      "applicant": "만도모빌리티",
+      "application_date": "2021-07-21",
+      "ipc_codes": ["G02B 27/01", "B60K 35/00", "G08G 1/16"],
+      "relevance_score": 72,
+      "tags": ["증강현실", "헤드업디스플레이", "주행안내", "위험경고"],
+      "abstract_preview": "차량 앞유리에 경로 안내와 위험 객체 경고를 증강현실로 중첩 표시합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 차량 센서와 내비게이션 정보를 이용하여 운전자 시야 전방에 경로, 차선, 위험 객체 정보를 표시하는 시스템에 관한 것이다.",
+      "inventors": ["문태호"],
+      "publication_date": "2022-02-16",
+      "registration_date": "2024-12-04",
+      "legal_status": "등록",
+      "claims": [
+        {
+          "number": 1,
+          "text": "차량 앞유리 표시 영역에 주행 경로와 위험 정보를 실제 도로 영상과 정합하여 표시하는 시스템."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2023-0055555",
+      "title": "복약 일정 관리 및 가족 공유 알림 서비스",
+      "applicant": "케어링크",
+      "application_date": "2023-05-09",
+      "ipc_codes": ["G16H 20/10", "G06Q 50/22", "H04W 4/12"],
+      "relevance_score": 71,
+      "tags": ["복약관리", "알림", "보호자공유", "헬스케어"],
+      "abstract_preview": "복용 시간과 미복용 상태를 관리하고 가족 또는 보호자에게 알림을 공유합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 처방 정보와 사용자 복약 이력을 기반으로 복약 일정을 생성하고 미복용 시 보호자에게 알림을 전송하는 서비스에 관한 것이다.",
+      "inventors": ["서지우"],
+      "publication_date": "2023-12-01",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "복약 스케줄에 따라 사용자 단말과 보호자 단말에 복용 알림 및 미복용 알림을 전송하는 방법."
+        }
+      ]
+    },
+    {
+      "patent_id": "10-2022-0099999",
+      "title": "이미지 인식 기반 재활용품 분류 및 분리배출 안내 시스템",
+      "applicant": "그린테크",
+      "application_date": "2022-10-28",
+      "ipc_codes": ["G06V 20/10", "B07C 5/342", "G06N 20/00"],
+      "relevance_score": 70,
+      "tags": ["재활용", "이미지인식", "분리배출", "폐기물분류"],
+      "abstract_preview": "카메라 이미지로 폐기물 종류와 소재를 판별해 분리배출 방법을 안내합니다.",
+      "kipris_url": "https://www.kipris.or.kr/",
+      "abstract": "본 발명은 폐기물 이미지를 분석하여 재활용 가능 여부와 배출 방법을 판단하고 사용자에게 안내하는 시스템에 관한 것이다.",
+      "inventors": ["배하늘"],
+      "publication_date": "2023-06-09",
+      "registration_date": null,
+      "legal_status": "공개",
+      "claims": [
+        {
+          "number": 1,
+          "text": "폐기물 이미지를 입력받아 재활용품 종류를 분류하고 지역별 분리배출 규칙에 따라 안내 정보를 생성하는 방법."
+        }
+      ]
     }
   ]
 }

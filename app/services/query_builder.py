@@ -58,6 +58,7 @@ class QueryBuilder:
         self.prompt_template = prompt_path.read_text(encoding="utf-8")
         self.max_retries = max_retries
         self.last_token_usage: QueryBuilderTokenUsage | None = None
+        self.provider_call_count = 0
 
     async def build(self, user_query: str) -> ExtractedQuery:
         provider = self.settings.llm_provider.lower()
@@ -96,6 +97,7 @@ class QueryBuilder:
                 "responseSchema": _gemini_response_schema(),
             },
         }
+        self.provider_call_count += 1
         response = await self._post_json(url, payload, params={"key": api_key})
         self._log_token_usage("gemini", self.settings.gemini_model, response)
         return _extract_gemini_text(response)
@@ -112,6 +114,7 @@ class QueryBuilder:
             "response_format": {"type": "json_object"},
             "temperature": 0.1,
         }
+        self.provider_call_count += 1
         response = await self._post_json(
             url,
             payload,
