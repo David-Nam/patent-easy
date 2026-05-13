@@ -154,10 +154,50 @@ def test_service_error_raises_upstream_error():
         finally:
             await async_client.aclose()
 
-        assert exc_info.value.code == "99"
+        assert exc_info.value.code == "KIPRIS_SERVICE_ERROR"
+        assert exc_info.value.details == {"kind": "service_error", "kipris_code": "99"}
         assert str(exc_info.value) == "bad key"
 
     asyncio.run(run())
+
+
+def test_timeout_raises_distinct_upstream_error():
+    async def run() -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            raise httpx.ReadTimeout("timed out")
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(settings=_settings(), http_client=async_client, cache_enabled=False)
+            with pytest.raises(KIPRISUpstreamError) as exc_info:
+                await client.search_patents(["자동차"])
+        finally:
+            await async_client.aclose()
+
+        assert exc_info.value.code == "KIPRIS_TIMEOUT"
+        assert exc_info.value.details == {"kind": "timeout"}
+
+    asyncio.run(run())
+
+
+def test_http_4xx_and_5xx_raise_distinct_upstream_errors():
+    async def run(status_code: int, expected_code: str, expected_kind: str) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(status_code, text="upstream error")
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(settings=_settings(), http_client=async_client, cache_enabled=False)
+            with pytest.raises(KIPRISUpstreamError) as exc_info:
+                await client.search_patents(["자동차"])
+        finally:
+            await async_client.aclose()
+
+        assert exc_info.value.code == expected_code
+        assert exc_info.value.details == {"kind": expected_kind, "status_code": status_code}
+
+    asyncio.run(run(401, "KIPRIS_HTTP_4XX", "http_4xx"))
+    asyncio.run(run(503, "KIPRIS_HTTP_5XX", "http_5xx"))
 
 
 def test_invalid_xml_raises_parse_error():
@@ -183,6 +223,8 @@ def test_search_patents_uses_cache_for_repeated_requests(tmp_path):
         def handler(_request: httpx.Request) -> httpx.Response:
             nonlocal request_count
             request_count += 1
+            if request_count > 1:
+                raise httpx.ReadTimeout("cache should prevent repeated upstream calls")
             return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))

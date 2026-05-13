@@ -21,11 +21,17 @@ class KIPRISConfigurationError(KIPRISError):
 
 
 class KIPRISUpstreamError(KIPRISError):
-    """Raised when KIPRIS returns an HTTP or service-level error."""
+    """Raised when KIPRIS returns an HTTP, network, or service-level error."""
 
-    def __init__(self, message: str, code: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        code: str | None = None,
+        details: dict[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.details = details or {}
 
 
 class KIPRISParseError(KIPRISError):
@@ -157,11 +163,30 @@ class KIPRISClient:
             else:
                 async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
                     response = await client.get(url, params=request_params)
+        except httpx.TimeoutException as exc:
+            raise KIPRISUpstreamError(
+                "KIPRIS request timed out",
+                code="KIPRIS_TIMEOUT",
+                details={"kind": "timeout"},
+            ) from exc
         except httpx.HTTPError as exc:
-            raise KIPRISUpstreamError(f"KIPRIS request failed: {exc}") from exc
+            raise KIPRISUpstreamError(
+                f"KIPRIS request failed: {exc}",
+                code="KIPRIS_REQUEST_ERROR",
+                details={"kind": "network_error"},
+            ) from exc
 
         if response.status_code >= 400:
-            raise KIPRISUpstreamError(f"KIPRIS returned HTTP {response.status_code}")
+            error_code = "KIPRIS_HTTP_5XX" if response.status_code >= 500 else "KIPRIS_HTTP_4XX"
+            error_kind = "http_5xx" if response.status_code >= 500 else "http_4xx"
+            raise KIPRISUpstreamError(
+                f"KIPRIS returned HTTP {response.status_code}",
+                code=error_code,
+                details={
+                    "kind": error_kind,
+                    "status_code": response.status_code,
+                },
+            )
 
         try:
             root = ET.fromstring(response.text)
@@ -206,7 +231,14 @@ def _raise_for_service_error(root: ET.Element) -> None:
     result_code = _first_text(root, "resultCode")
     if result_code and result_code != "00":
         result_msg = _first_text(root, "resultMsg") or "Unknown KIPRIS service error"
-        raise KIPRISUpstreamError(result_msg, code=result_code)
+        raise KIPRISUpstreamError(
+            result_msg,
+            code="KIPRIS_SERVICE_ERROR",
+            details={
+                "kind": "service_error",
+                "kipris_code": result_code,
+            },
+        )
 
 
 def _map_search_item(item: ET.Element, index: int) -> PatentListItem:

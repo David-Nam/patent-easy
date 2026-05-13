@@ -2,8 +2,8 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.19
-> **최종 수정일**: 2026-05-12
+> **문서 버전**: v1.21
+> **최종 수정일**: 2026-05-13
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
 ---
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13 완료. 다음 작업은 Phase 3 작업 14 Backend Error Handling Hardening.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~14 완료. 다음 작업은 Phase 3 작업 15 Observability & Runtime Guardrails.
 
 ---
 
@@ -701,6 +701,8 @@ pytest -m live_llm
 
 #### 작업 14. Backend Error Handling Hardening
 
+**상태**: 완료 (2026-05-13)
+
 **완료 조건**:
 - KIPRIS 장애 시 표준 에러 응답 반환
 - KIPRIS timeout, 4xx, 5xx, XML parse 실패 구분
@@ -708,6 +710,25 @@ pytest -m live_llm
 - cache hit 가능 시 upstream 장애에도 캐시 결과 반환
 - 모든 에러 응답은 `{code, message, details?}` 구조 유지
 - Swagger `/docs`에서 에러 모델 확인 가능
+
+**구현 내용**:
+- 표준 에러 스키마 `ErrorResponse` 추가
+- FastAPI/Starlette HTTP 예외와 요청 검증 예외를 `{code, message, details?}` 응답으로 변환
+- 예상하지 못한 500 오류도 `INTERNAL_SERVER_ERROR` 표준 응답으로 변환
+- KIPRIS timeout, 네트워크 오류, HTTP 4xx/5xx, KIPRIS 서비스 오류를 구분해 `details`에 기록
+- 검색/요약/특허 상세 라우터의 에러 응답을 `ErrorResponse` 기반으로 문서화
+- LLM provider/parse/configuration 장애를 표준 에러 응답으로 변환
+- cache hit 시 upstream을 재호출하지 않는 기존 동작을 에러 처리 테스트 범위에 포함
+
+**검증 예정 명령**:
+```bash
+pytest tests/test_error_response.py tests/test_search_api.py tests/test_summary_api.py tests/test_kipris_client.py tests/test_openapi_contract.py
+pytest
+```
+
+**검증 결과**:
+- 표적 에러 처리 테스트: `venv/bin/python -m pytest tests/test_error_response.py tests/test_search_api.py tests/test_summary_api.py tests/test_kipris_client.py tests/test_openapi_contract.py` 28개 통과
+- 전체 offline 테스트: `venv/bin/python -m pytest` 55개 통과, live 테스트 3개 skip
 
 #### 작업 15. Observability & Runtime Guardrails
 
@@ -850,7 +871,7 @@ pytest -m live_llm
   - [ ] 작업 12. (조건부) 챗봇 엔드포인트 pending
 - [ ] **Phase 3**
   - [x] 작업 13. Backend Test Suite Consolidation
-  - [ ] 작업 14. Backend Error Handling Hardening
+  - [x] 작업 14. Backend Error Handling Hardening
   - [ ] 작업 15. Observability & Runtime Guardrails
   - [ ] 작업 16. Backend Evaluation Script
 - [ ] **Phase 4**
@@ -886,11 +907,15 @@ pytest -m live_llm
 | 2026-05-12 | 작업 12 챗봇 엔드포인트 pending | 발표/회의에서 필요성이 확정될 때까지 Phase 3 검증·안정화를 우선 진행 |
 | 2026-05-12 | Phase 3는 작업 13 테스트 통합부터 진행 | 배포 전 품질 게이트와 live/offline 테스트 분리를 먼저 고정 |
 | 2026-05-12 | Backend Test Suite Consolidation 완료 | OpenAPI 계약 테스트와 offline/KIPRIS/Gemini/summary live 품질 게이트 통과 |
+| 2026-05-13 | Backend Error Handling Hardening 구현 | 에러 응답을 `{code, message, details?}`로 표준화하고 KIPRIS/LLM 장애 분류를 명시 |
+| 2026-05-13 | Backend Error Handling Hardening 검증 완료 | 표적 에러 처리 테스트 28개와 전체 offline 테스트 55개 통과 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.21 | 2026-05-13 | 작업 14 검증 결과와 완료 상태 반영 |
+| v1.20 | 2026-05-13 | 작업 14 에러 처리 강화 구현 상태와 검증 예정 항목 반영 |
 | v1.19 | 2026-05-12 | 작업 13 검증 결과와 완료 상태 반영 |
 | v1.18 | 2026-05-12 | 작업 12 pending 처리와 작업 13 테스트 통합 구현 상태 반영 |
 | v1.17 | 2026-05-12 | 요약 엔드포인트 검증 결과와 작업 11 완료 상태 반영 |
@@ -944,11 +969,11 @@ pytest -m live_llm
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~14 완료
 
 **즉시 할 일**:
 1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 작업 14 Backend Error Handling Hardening 진행
+2. 사용자 컨펌 후 작업 15 Observability & Runtime Guardrails 진행
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."

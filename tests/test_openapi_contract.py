@@ -35,9 +35,29 @@ def test_openapi_contains_error_response_statuses_for_real_endpoints():
 
     assert "502" in spec["paths"]["/api/v1/search"]["post"]["responses"]
     assert "503" in spec["paths"]["/api/v1/search"]["post"]["responses"]
+    assert _response_schema_ref(spec, "/api/v1/search", "post", "422") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/search", "post", "502") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/search", "post", "503") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}", "get", "404") == "#/components/schemas/ErrorResponse"
     assert "404" in spec["paths"]["/api/v1/patents/{patent_id}/summary"]["post"]["responses"]
     assert "502" in spec["paths"]["/api/v1/patents/{patent_id}/summary"]["post"]["responses"]
     assert "503" in spec["paths"]["/api/v1/patents/{patent_id}/summary"]["post"]["responses"]
+    assert (
+        _response_schema_ref(spec, "/api/v1/patents/{patent_id}/summary", "post", "404")
+        == "#/components/schemas/ErrorResponse"
+    )
+    assert (
+        _response_schema_ref(spec, "/api/v1/patents/{patent_id}/summary", "post", "422")
+        == "#/components/schemas/ErrorResponse"
+    )
+    assert (
+        _response_schema_ref(spec, "/api/v1/patents/{patent_id}/summary", "post", "502")
+        == "#/components/schemas/ErrorResponse"
+    )
+    assert (
+        _response_schema_ref(spec, "/api/v1/patents/{patent_id}/summary", "post", "503")
+        == "#/components/schemas/ErrorResponse"
+    )
 
 
 def _response_schema_ref(spec: dict, path: str, method: str, status_code: str) -> str:

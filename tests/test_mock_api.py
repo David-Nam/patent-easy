@@ -68,7 +68,7 @@ def test_patent_not_found():
     response = client.get("/api/v1/patents/not-found")
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "PATENT_NOT_FOUND"
+    assert response.json()["code"] == "PATENT_NOT_FOUND"
 
 
 def test_mock_keyword_cases_are_structured():
