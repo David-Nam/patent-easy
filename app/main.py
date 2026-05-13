@@ -1,3 +1,6 @@
+from time import perf_counter
+from uuid import uuid4
+
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -7,10 +10,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
 from app.routers import patents, search, summary
+from app.services.cache import SQLiteCache
 from app.utils.api_errors import error_payload
+from app.utils.logger import get_logger
 
 
 settings = get_settings()
+logger = get_logger(__name__)
 
 app = FastAPI(
     title=settings.app_name,
@@ -25,6 +31,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    started_at = perf_counter()
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["x-request-id"] = request_id
+        return response
+    finally:
+        duration_ms = (perf_counter() - started_at) * 1000
+        logger.info(
+            "request method=%s path=%s status_code=%s duration_ms=%.2f request_id=%s",
+            request.method,
+            request.url.path,
+            status_code,
+            duration_ms,
+            request_id,
+        )
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -71,7 +99,68 @@ async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSO
 
 @app.get("/health", tags=["health"])
 async def health_check() -> dict[str, str]:
-    return {"status": "ok", "service": "patent-easy-backend"}
+    return {
+        "status": "ok",
+        "service": "patent-easy-backend",
+        "version": settings.app_version,
+        "environment": settings.app_env,
+    }
+
+
+@app.get("/ready", tags=["health"])
+async def readiness_check() -> JSONResponse:
+    payload, status_code = _readiness_payload()
+    return JSONResponse(status_code=status_code, content=jsonable_encoder(payload))
+
+
+def _readiness_payload() -> tuple[dict[str, object], int]:
+    checks = {
+        "cache": _cache_readiness(),
+        "kipris": _kipris_readiness(),
+        "llm": _llm_readiness(),
+    }
+    ready = all(check["status"] in {"ok", "configured", "mock"} for check in checks.values())
+    payload = {
+        "status": "ready" if ready else "not_ready",
+        "service": "patent-easy-backend",
+        "checks": checks,
+    }
+    status_code = status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    return payload, status_code
+
+
+def _cache_readiness() -> dict[str, object]:
+    try:
+        SQLiteCache(settings.cache_db_path).ping()
+    except Exception as exc:
+        return {"status": "error", "path": settings.cache_db_path, "message": exc.__class__.__name__}
+    return {"status": "ok", "path": settings.cache_db_path}
+
+
+def _kipris_readiness() -> dict[str, object]:
+    return {
+        "status": "configured" if settings.kipris_api_key else "not_configured",
+        "base_url": settings.kipris_base_url,
+    }
+
+
+def _llm_readiness() -> dict[str, object]:
+    provider = settings.llm_provider.lower()
+    if provider == "mock":
+        return {"status": "mock", "provider": "mock", "model": "mock"}
+    if provider == "gemini":
+        return {
+            "status": "configured" if settings.gemini_api_key else "not_configured",
+            "provider": "gemini",
+            "model": settings.gemini_model,
+        }
+    if provider == "openai":
+        return {
+            "status": "configured" if settings.openai_api_key else "not_configured",
+            "provider": "openai",
+            "model": settings.openai_model,
+        }
+    return {"status": "invalid", "provider": settings.llm_provider}
 
 
 app.include_router(search.router, prefix="/api/v1")

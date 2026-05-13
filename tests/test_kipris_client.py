@@ -83,6 +83,29 @@ def test_search_patent_page_returns_total_count_from_fixture():
     asyncio.run(run())
 
 
+def test_kipris_logs_endpoint_calls_without_api_key(caplog):
+    async def run() -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(
+                settings=_settings(kipris_search_path="/search"),
+                http_client=async_client,
+                cache_enabled=False,
+            )
+            with caplog.at_level("INFO", logger="app.services.kipris_client"):
+                await client.search_patents(["자동차"])
+        finally:
+            await async_client.aclose()
+
+        assert "kipris request endpoint=/search call_count=1" in caplog.text
+        assert "test-key" not in caplog.text
+
+    asyncio.run(run())
+
+
 def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
     async def run() -> None:
         requests: list[httpx.Request] = []

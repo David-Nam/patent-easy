@@ -61,7 +61,34 @@ def test_gemini_provider_posts_structured_summary_request():
         assert len(requests) == 1
         assert summary.core_summary == "배터리 열관리 모드를 도출하는 특허입니다."
         assert client.last_token_usage is not None
+        assert client.last_token_usage.model == "gemini-test"
         assert client.last_token_usage.total_tokens == 42
+
+    asyncio.run(run())
+
+
+def test_llm_usage_logs_provider_model_and_tokens_without_api_key(caplog):
+    async def run() -> None:
+        async_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=_gemini_response(_summary_payload())))
+        )
+        try:
+            client = LLMClient(
+                settings=_settings(
+                    llm_provider="gemini",
+                    gemini_api_key="gemini-key",
+                    gemini_model="gemini-test",
+                ),
+                http_client=async_client,
+            )
+            with caplog.at_level("INFO", logger="app.services.llm_client"):
+                await client.summarize_patent(_sample_patent(), "배터리 열관리 서비스")
+        finally:
+            await async_client.aclose()
+
+        assert "llm usage provider=gemini model=gemini-test" in caplog.text
+        assert "prompt_tokens=20 completion_tokens=22 total_tokens=42" in caplog.text
+        assert "gemini-key" not in caplog.text
 
     asyncio.run(run())
 

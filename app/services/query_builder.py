@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any
@@ -10,11 +11,13 @@ from pydantic import ValidationError
 from app.config import Settings, get_settings
 from app.schemas.search import ExtractedQuery
 from app.services.mock_llm_client import mock_llm_client
+from app.utils.logger import get_logger
 
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "extract_keywords.txt"
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+logger = get_logger(__name__)
 
 
 class QueryBuilderError(RuntimeError):
@@ -33,6 +36,15 @@ class QueryBuilderParseError(QueryBuilderError):
     """Raised when the provider returns invalid JSON or schema data."""
 
 
+@dataclass(frozen=True)
+class QueryBuilderTokenUsage:
+    provider: str
+    model: str
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    total_tokens: int | None
+
+
 class QueryBuilder:
     def __init__(
         self,
@@ -45,6 +57,7 @@ class QueryBuilder:
         self.http_client = http_client
         self.prompt_template = prompt_path.read_text(encoding="utf-8")
         self.max_retries = max_retries
+        self.last_token_usage: QueryBuilderTokenUsage | None = None
 
     async def build(self, user_query: str) -> ExtractedQuery:
         provider = self.settings.llm_provider.lower()
@@ -84,6 +97,7 @@ class QueryBuilder:
             },
         }
         response = await self._post_json(url, payload, params={"key": api_key})
+        self._log_token_usage("gemini", self.settings.gemini_model, response)
         return _extract_gemini_text(response)
 
     async def _call_openai(self, prompt: str) -> str:
@@ -103,6 +117,7 @@ class QueryBuilder:
             payload,
             headers={"Authorization": f"Bearer {api_key}"},
         )
+        self._log_token_usage("openai", self.settings.openai_model, response)
         return _extract_openai_text(response)
 
     async def _post_json(
@@ -153,6 +168,18 @@ class QueryBuilder:
             )
         return prompt
 
+    def _log_token_usage(self, provider: str, model: str, payload: dict[str, Any]) -> None:
+        usage = _extract_token_usage(provider, model, payload)
+        self.last_token_usage = usage
+        logger.info(
+            "llm usage provider=%s model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            usage.provider,
+            usage.model,
+            usage.prompt_tokens,
+            usage.completion_tokens,
+            usage.total_tokens,
+        )
+
 
 def _parse_extracted_query(raw_text: str) -> ExtractedQuery:
     try:
@@ -191,6 +218,30 @@ def _extract_openai_text(payload: dict[str, Any]) -> str:
         return payload["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise QueryBuilderProviderError("OpenAI response did not include message content") from exc
+
+
+def _extract_token_usage(provider: str, model: str, payload: dict[str, Any]) -> QueryBuilderTokenUsage:
+    if provider == "gemini":
+        usage = payload.get("usageMetadata", {})
+        return QueryBuilderTokenUsage(
+            provider=provider,
+            model=model,
+            prompt_tokens=_optional_int(usage.get("promptTokenCount")),
+            completion_tokens=_optional_int(usage.get("candidatesTokenCount")),
+            total_tokens=_optional_int(usage.get("totalTokenCount")),
+        )
+    usage = payload.get("usage", {})
+    return QueryBuilderTokenUsage(
+        provider=provider,
+        model=model,
+        prompt_tokens=_optional_int(usage.get("prompt_tokens")),
+        completion_tokens=_optional_int(usage.get("completion_tokens")),
+        total_tokens=_optional_int(usage.get("total_tokens")),
+    )
+
+
+def _optional_int(value: Any) -> int | None:
+    return value if isinstance(value, int) else None
 
 
 def _gemini_response_schema() -> dict[str, Any]:

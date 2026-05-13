@@ -10,6 +10,10 @@ from app.config import Settings, get_settings
 from app.schemas.patent import Claim, PatentDetail, PatentListItem
 from app.schemas.search import SearchFilters
 from app.services.cache import SQLiteCache, normalize_cache_key
+from app.utils.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 class KIPRISError(RuntimeError):
@@ -63,6 +67,7 @@ class KIPRISClient:
         self.http_client = http_client
         self.cache = cache if cache is not None else SQLiteCache() if cache_enabled else None
         self.timeout = timeout
+        self.endpoint_call_counts: dict[str, int] = {}
 
     async def search_patents(
         self,
@@ -157,6 +162,7 @@ class KIPRISClient:
 
         request_params = {**params, endpoint.key_param: api_key}
         url = _join_url(self.settings.kipris_base_url, endpoint.path)
+        self._record_endpoint_call(endpoint.path)
         try:
             if self.http_client is not None:
                 response = await self.http_client.get(url, params=request_params)
@@ -195,6 +201,11 @@ class KIPRISClient:
 
         _raise_for_service_error(root)
         return root
+
+    def _record_endpoint_call(self, endpoint_path: str) -> None:
+        call_count = self.endpoint_call_counts.get(endpoint_path, 0) + 1
+        self.endpoint_call_counts[endpoint_path] = call_count
+        logger.info("kipris request endpoint=%s call_count=%s", endpoint_path, call_count)
 
     def _search_cache_key(
         self,

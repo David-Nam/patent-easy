@@ -65,6 +65,34 @@ def test_gemini_provider_posts_structured_output_request():
 
         assert len(requests) == 1
         assert extracted.keywords == ["음식 이미지 인식", "칼로리 자동 계산", "맞춤형 식단 추천"]
+        assert builder.last_token_usage is not None
+        assert builder.last_token_usage.model == "gemini-test"
+
+    asyncio.run(run())
+
+
+def test_query_builder_logs_llm_usage_without_api_key(caplog):
+    async def run() -> None:
+        async_client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=_gemini_response(_valid_extracted_payload())))
+        )
+        try:
+            builder = QueryBuilder(
+                settings=_settings(
+                    llm_provider="gemini",
+                    gemini_api_key="gemini-key",
+                    gemini_model="gemini-test",
+                ),
+                http_client=async_client,
+            )
+            with caplog.at_level("INFO", logger="app.services.query_builder"):
+                await builder.build("배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능")
+        finally:
+            await async_client.aclose()
+
+        assert "llm usage provider=gemini model=gemini-test" in caplog.text
+        assert "prompt_tokens=20 completion_tokens=22 total_tokens=42" in caplog.text
+        assert "gemini-key" not in caplog.text
 
     asyncio.run(run())
 
@@ -210,7 +238,13 @@ def _valid_extracted_payload() -> dict:
 
 
 def _gemini_response(payload: dict) -> dict:
-    return _gemini_text_response(json.dumps(payload, ensure_ascii=False))
+    response = _gemini_text_response(json.dumps(payload, ensure_ascii=False))
+    response["usageMetadata"] = {
+        "promptTokenCount": 20,
+        "candidatesTokenCount": 22,
+        "totalTokenCount": 42,
+    }
+    return response
 
 
 def _gemini_text_response(text: str) -> dict:
@@ -218,4 +252,7 @@ def _gemini_text_response(text: str) -> dict:
 
 
 def _openai_response(payload: dict) -> dict:
-    return {"choices": [{"message": {"content": json.dumps(payload, ensure_ascii=False)}}]}
+    return {
+        "choices": [{"message": {"content": json.dumps(payload, ensure_ascii=False)}}],
+        "usage": {"prompt_tokens": 20, "completion_tokens": 22, "total_tokens": 42},
+    }

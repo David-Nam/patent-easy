@@ -14,6 +14,7 @@ def test_openapi_documents_core_backend_routes():
     paths = spec["paths"]
 
     assert "/health" in paths
+    assert "/ready" in paths
     assert "/api/v1/search" in paths
     assert "/api/v1/patents/{patent_id}" in paths
     assert "/api/v1/patents/{patent_id}/summary" in paths

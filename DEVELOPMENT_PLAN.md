@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.21
+> **문서 버전**: v1.23
 > **최종 수정일**: 2026-05-13
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~14 완료. 다음 작업은 Phase 3 작업 15 Observability & Runtime Guardrails.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~15 완료. 다음 작업은 Phase 3 작업 16 Backend Evaluation Script.
 
 ---
 
@@ -732,6 +732,8 @@ pytest
 
 #### 작업 15. Observability & Runtime Guardrails
 
+**상태**: 완료 (2026-05-13)
+
 **완료 조건**:
 - 요청별 처리 시간 로깅
 - KIPRIS endpoint별 호출 횟수 로깅
@@ -739,6 +741,26 @@ pytest
 - cache hit/miss 로깅
 - `/health`는 앱 상태, `/ready`는 외부 의존성/캐시 준비 상태 확인
 - 민감 정보(API key, 원문 전체 청구항)는 로그에 남기지 않음
+
+**구현 내용**:
+- FastAPI request middleware로 method/path/status/duration/request_id 로깅 추가
+- `/health`에 version/environment 앱 상태 정보 추가
+- `/ready`에서 cache 연결, KIPRIS 설정, LLM provider/model 설정 상태 확인
+- KIPRIS 실제 upstream 호출 시 endpoint별 call count 로깅
+- LLM Client와 Query Builder에서 provider/model/token usage 로깅
+- SQLite cache `ping()`과 hit/miss/set 로그 검증 추가
+- 로그에는 query string, API key, cache payload, 청구항 원문을 남기지 않는 방향으로 제한
+- backend test plan의 Phase 3 보강 항목 상태 업데이트
+
+**검증 예정 명령**:
+```bash
+pytest tests/test_observability.py tests/test_cache.py tests/test_kipris_client.py tests/test_llm_client.py tests/test_query_builder.py tests/test_openapi_contract.py
+pytest
+```
+
+**검증 결과**:
+- 표적 관측성 테스트: `venv/bin/python -m pytest tests/test_observability.py tests/test_cache.py tests/test_kipris_client.py tests/test_llm_client.py tests/test_query_builder.py tests/test_openapi_contract.py` 41개 통과
+- 전체 offline 테스트: `venv/bin/python -m pytest` 64개 통과, live 테스트 3개 skip
 
 #### 작업 16. Backend Evaluation Script
 
@@ -872,7 +894,7 @@ pytest
 - [ ] **Phase 3**
   - [x] 작업 13. Backend Test Suite Consolidation
   - [x] 작업 14. Backend Error Handling Hardening
-  - [ ] 작업 15. Observability & Runtime Guardrails
+  - [x] 작업 15. Observability & Runtime Guardrails
   - [ ] 작업 16. Backend Evaluation Script
 - [ ] **Phase 4**
   - [ ] 작업 17. Production Runtime Configuration
@@ -909,11 +931,15 @@ pytest
 | 2026-05-12 | Backend Test Suite Consolidation 완료 | OpenAPI 계약 테스트와 offline/KIPRIS/Gemini/summary live 품질 게이트 통과 |
 | 2026-05-13 | Backend Error Handling Hardening 구현 | 에러 응답을 `{code, message, details?}`로 표준화하고 KIPRIS/LLM 장애 분류를 명시 |
 | 2026-05-13 | Backend Error Handling Hardening 검증 완료 | 표적 에러 처리 테스트 28개와 전체 offline 테스트 55개 통과 |
+| 2026-05-13 | Observability & Runtime Guardrails 구현 | request latency, readiness, cache/KIPRIS/LLM 로그를 추가하고 민감 정보 로그 노출을 제한 |
+| 2026-05-13 | Observability & Runtime Guardrails 검증 완료 | 표적 관측성 테스트 41개와 전체 offline 테스트 64개 통과 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.23 | 2026-05-13 | 작업 15 검증 결과와 완료 상태 반영 |
+| v1.22 | 2026-05-13 | 작업 15 관측성·runtime guardrail 구현 상태와 검증 예정 항목 반영 |
 | v1.21 | 2026-05-13 | 작업 14 검증 결과와 완료 상태 반영 |
 | v1.20 | 2026-05-13 | 작업 14 에러 처리 강화 구현 상태와 검증 예정 항목 반영 |
 | v1.19 | 2026-05-12 | 작업 13 검증 결과와 완료 상태 반영 |
@@ -969,11 +995,11 @@ pytest
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~14 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~15 완료
 
 **즉시 할 일**:
 1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 작업 15 Observability & Runtime Guardrails 진행
+2. 사용자 컨펌 후 작업 16 Backend Evaluation Script 진행
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."

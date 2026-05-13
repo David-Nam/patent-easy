@@ -44,6 +44,7 @@ class LLMParseError(LLMClientError):
 @dataclass(frozen=True)
 class TokenUsage:
     provider: str
+    model: str
     prompt_tokens: int | None
     completion_tokens: int | None
     total_tokens: int | None
@@ -168,7 +169,7 @@ class LLMClient:
             payload,
             headers={"x-goog-api-key": api_key},
         )
-        self._log_token_usage("gemini", response)
+        self._log_token_usage("gemini", self.settings.gemini_model, response)
         return _extract_gemini_text(response)
 
     async def _call_openai(self, prompt: str) -> str:
@@ -188,7 +189,7 @@ class LLMClient:
             payload,
             headers={"Authorization": f"Bearer {api_key}"},
         )
-        self._log_token_usage("openai", response)
+        self._log_token_usage("openai", self.settings.openai_model, response)
         return _extract_openai_text(response)
 
     async def _post_json(
@@ -250,12 +251,13 @@ class LLMClient:
         }
         return f"{self.rerank_prompt_template}\n\nRerank context:\n{_json_dumps(context)}"
 
-    def _log_token_usage(self, provider: str, payload: dict[str, Any]) -> None:
-        usage = _extract_token_usage(provider, payload)
+    def _log_token_usage(self, provider: str, model: str, payload: dict[str, Any]) -> None:
+        usage = _extract_token_usage(provider, model, payload)
         self.last_token_usage = usage
         logger.info(
-            "llm usage provider=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            "llm usage provider=%s model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
             usage.provider,
+            usage.model,
             usage.prompt_tokens,
             usage.completion_tokens,
             usage.total_tokens,
@@ -322,11 +324,12 @@ def _extract_openai_text(payload: dict[str, Any]) -> str:
         raise LLMProviderError("OpenAI response did not include message content") from exc
 
 
-def _extract_token_usage(provider: str, payload: dict[str, Any]) -> TokenUsage:
+def _extract_token_usage(provider: str, model: str, payload: dict[str, Any]) -> TokenUsage:
     if provider == "gemini":
         usage = payload.get("usageMetadata", {})
         return TokenUsage(
             provider=provider,
+            model=model,
             prompt_tokens=_optional_int(usage.get("promptTokenCount")),
             completion_tokens=_optional_int(usage.get("candidatesTokenCount")),
             total_tokens=_optional_int(usage.get("totalTokenCount")),
@@ -334,6 +337,7 @@ def _extract_token_usage(provider: str, payload: dict[str, Any]) -> TokenUsage:
     usage = payload.get("usage", {})
     return TokenUsage(
         provider=provider,
+        model=model,
         prompt_tokens=_optional_int(usage.get("prompt_tokens")),
         completion_tokens=_optional_int(usage.get("completion_tokens")),
         total_tokens=_optional_int(usage.get("total_tokens")),

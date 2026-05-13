@@ -98,6 +98,11 @@ class SQLiteCache:
             )
             return cursor.rowcount
 
+    def ping(self) -> bool:
+        with self._connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+        return True
+
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
 

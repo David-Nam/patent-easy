@@ -74,8 +74,8 @@ Phase 4 배포 전 release candidate는 다음 조건을 만족해야 합니다.
 - 배포 또는 발표 리허설 전에는 요약 live 테스트가 1회 이상 통과합니다.
 - live 테스트 실패 시 원인을 문서 또는 이슈에 남기고 재시도 여부를 결정합니다.
 
-## 아직 보강할 항목
+## Phase 3 보강 항목
 
-- 작업 14에서 표준 에러 응답 모델을 OpenAPI schema로 명시해야 합니다.
-- 작업 15에서 request latency, provider 호출 횟수, token usage 로그를 구조화해야 합니다.
+- 작업 14에서 표준 에러 응답 모델을 OpenAPI schema로 명시했습니다.
+- 작업 15에서 request latency, provider 호출 횟수, token usage 로그를 구조화했습니다.
 - 작업 16에서 평가용 쿼리와 benchmark script를 추가해 정량 품질 지표를 산출해야 합니다.
