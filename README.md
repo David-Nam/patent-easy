@@ -43,6 +43,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 - Health check: `http://localhost:8000/health`
+- Readiness check: `http://localhost:8000/ready`
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
@@ -51,9 +52,12 @@ uvicorn app.main:app --reload --port 8000
 | Method | Path | 설명 |
 |---|---|---|
 | `GET` | `/health` | 서버 상태 확인 |
+| `GET` | `/ready` | cache, KIPRIS, LLM 설정 준비 상태 확인 |
 | `POST` | `/api/v1/search` | 자연어 아이디어를 키워드로 변환한 뒤 KIPRIS 검색 |
 | `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 정보 조회 |
 | `POST` | `/api/v1/patents/{patent_id}/summary` | KIPRIS 상세/청구항 기반 LLM 요약 생성 |
+
+상세한 요청/응답 예시와 에러 코드는 `docs/api_reference.md`를 기준으로 확인합니다.
 
 ### 검색 예시
 
@@ -66,7 +70,7 @@ curl -X POST http://localhost:8000/api/v1/search \
 ### 상세 조회 예시
 
 ```bash
-curl http://localhost:8000/api/v1/patents/10-2023-0147601
+curl http://localhost:8000/api/v1/patents/10-2023-0098765
 ```
 
 ### 요약 예시
@@ -147,6 +151,7 @@ venv/bin/python scripts/benchmark.py --mode mock --cache off
 | 문서 | 설명 |
 |---|---|
 | `DEVELOPMENT_PLAN.md` | 전체 개발 계획과 작업 진행 상태 |
+| `docs/api_reference.md` | API 전체 기능, 요청/응답 예시, 에러 코드 |
 | `docs/backend_test_plan.md` | 백엔드 테스트 및 품질 게이트 |
 | `docs/backend_evaluation_report.md` | 검색 품질 평가 방법과 benchmark 실행 가이드 |
 | `docs/kipris_api_research.md` | KIPRIS Plus API 검증 결과 |

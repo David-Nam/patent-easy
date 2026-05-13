@@ -1015,7 +1015,7 @@ venv/bin/python -m pytest
 
 ### 9.2 팀 내부 문서
 - 중간보고서: `docs/중간보고서.pdf`
-- API 명세: `docs/api_spec_v0.1.md` (이 문서로 통합 가능)
+- API Reference: `docs/api_reference.md`
 - 와이어프레임: https://patent-wise-finder.lovable.app/
 
 ### 9.3 팀 구성
