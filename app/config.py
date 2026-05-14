@@ -20,6 +20,9 @@ class Settings(BaseModel):
 
     cors_origins: list[str] = Field(default_factory=list)
 
+    llm_provider: str = Field(default_factory=lambda: os.getenv("LLM_PROVIDER", "gemini").lower())
+    gemini_api_key: str | None = Field(default_factory=lambda: os.getenv("GEMINI_API_KEY") or None)
+    gemini_model: str = Field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"))
     openai_api_key: str | None = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY") or None)
     openai_model: str = Field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
 

@@ -18,9 +18,9 @@ Do not hard-code the base URL outside the env fallback layer.
 
 No API key is required for frontend Mock API integration.
 
-The frontend must not read or send `KIPRIS_API_KEY` or `OPENAI_API_KEY`.
-Those keys are backend-only and are not needed while the backend serves
-Mock search, detail, and summary responses.
+The frontend must not read or send `KIPRIS_API_KEY`, `GEMINI_API_KEY`, or
+`OPENAI_API_KEY`. Those keys are backend-only and are not needed while the
+backend serves Mock search, detail, and summary responses.
 
 ## Required Endpoints
 
@@ -173,7 +173,7 @@ type SearchRequest = {
 - Default `page` to `1`.
 - Default `page_size` to `10`.
 - Surface non-2xx responses as user-visible errors.
-- Do not call OpenAI or KIPRIS directly from the frontend.
+- Do not call KIPRIS or LLM providers directly from the frontend.
 - Do not duplicate Mock data in the frontend.
 
 ## Suggested API Client Interface
