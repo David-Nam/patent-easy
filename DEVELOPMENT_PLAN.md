@@ -2,8 +2,8 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.25
-> **최종 수정일**: 2026-05-13
+> **문서 버전**: v1.26
+> **최종 수정일**: 2026-05-14
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
 ---
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. 다음 작업은 Phase 4 작업 17 Production Runtime Configuration.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. 다음 작업은 Phase 4 작업 17 Render Demo Runtime Configuration.
 
 ---
 
@@ -213,7 +213,7 @@ patent-easy-backend/
 | **임베딩** | (필요 시) text-embedding-3-small or bge-m3 | 재정렬에 사용. MVP에서는 보류 가능 |
 | **캐싱** | SQLite | 설정 0, 학교 프로젝트 규모에 충분 |
 | **벡터DB** | (필요 시) Chroma 로컬 | 단일 특허 청구항 처리 정도면 메모리로 충분 |
-| **배포** | Render 또는 Railway + Docker/uvicorn | 백엔드 서버 공개 URL, env var, health check 관리가 단순 |
+| **배포** | Render Free Web Service + uvicorn | 기말 프로젝트 시연용 공개 URL, env var, health check 관리가 가장 단순 |
 
 ### 3.1 언어 선택 검토
 
@@ -807,51 +807,83 @@ venv/bin/python -m pytest
 
 ---
 
-### Phase 4: 서버 배포·릴리스 (6/01 ~ 6/09)
+### Phase 4: Render 시연용 서버 배포 (6/01 ~ 6/09)
 
-> **목표**: 프론트엔드와 별개로 동작하는 공개 백엔드 서버 URL을 만들고, 배포 후 검증을 완료한다.
+> **목표**: 기말 프로젝트 발표/시연을 위해 Render Free Web Service에 백엔드
+> 서버를 배포하고, 공개 URL에서 핵심 API가 동작하는지 검증한다.
 
-#### 작업 17. Production Runtime Configuration
+**배포 범위 결정**:
+- 제품 운영 배포가 아니라 기말 프로젝트 시연용 배포로 한정한다.
+- 배포 target은 Render Free Web Service로 고정한다.
+- Docker는 기본 범위에서 제외하고, Render의 Python runtime과 `requirements.txt`
+  기반 배포를 우선 사용한다.
+- Render 무료 Web Service는 15분 idle 후 sleep될 수 있으므로 발표 전 서버를
+  미리 깨워 둔다.
+- Render 무료 Web Service의 filesystem은 ephemeral이므로 SQLite cache는
+  영구 저장소가 아니라 재시작 시 사라져도 되는 임시 cache로 취급한다.
+- 장기 운영, persistent disk, Redis/Postgres cache, multi-instance scaling은
+  이번 Phase 4 범위에서 제외한다.
+
+#### 작업 17. Render Demo Runtime Configuration
 
 **완료 조건**:
-- `Dockerfile` 또는 platform start command 작성
-- production start command 확정:
+- Render용 start command 확정:
   ```bash
   uvicorn app.main:app --host 0.0.0.0 --port $PORT
   ```
-- `.env.example`을 production env var 기준으로 정리
-- `APP_ENV=production`, `APP_DEBUG=false`, `CORS_ORIGINS` 설정 방법 문서화
-- SQLite cache 경로와 배포 환경의 파일 지속성 정책 결정
+- Render용 build command 확정:
+  ```bash
+  pip install -r requirements.txt
+  ```
+- `requirements.txt`에 배포 실행에 필요한 패키지가 모두 포함되어 있는지 확인
+- `.env.example`과 README에 Render Environment Variables 설정 방법 반영
+- Render 환경변수 기준값 정리:
+  - `APP_ENV=production`
+  - `APP_DEBUG=false`
+  - `KIPRIS_API_KEY`
+  - `LLM_PROVIDER=gemini`
+  - `GEMINI_API_KEY`
+  - `CACHE_DB_PATH=/tmp/patent-easy-cache.sqlite`
+  - `CACHE_TTL_SEARCH`, `CACHE_TTL_DETAIL`, `CACHE_TTL_SUMMARY`
+  - `CORS_ORIGINS`
+- 추가로 보관 중인 KIPRIS 보조 key는 사용하지 않고, 단일 공식 key만 실제 호출에 사용
+- `/ready`에서 Render 환경변수 누락 여부를 확인할 수 있도록 사용 절차 문서화
 
-#### 작업 18. Deploy Backend Server
+#### 작업 18. Render Web Service Deploy
 
 **완료 조건**:
-- Render 또는 Railway 중 하나를 배포 target으로 확정
-- GitHub repo 기반 자동 배포 또는 Docker 배포 설정
-- 배포 환경변수 등록:
-  - `KIPRIS_API_KEY`
-  - `LLM_PROVIDER`
-  - `GEMINI_API_KEY` 또는 `OPENAI_API_KEY`
-  - cache TTL/env vars
-  - `CORS_ORIGINS`
+- Render 계정 생성 또는 로그인
+- GitHub repository를 Render Web Service에 연결
+- Runtime은 Python, instance type은 Free로 설정
+- build command와 start command 입력
+- Render dashboard에 환경변수 등록
 - public backend URL 확보
+- 최초 배포 로그에서 dependency install과 Uvicorn start 성공 확인
 - `/health`, `/ready`, `/docs`, `/openapi.json` 접근 확인
 
-**권장 배포안**:
-- 1순위: Render Web Service 또는 Railway Web Service
-- MVP cache는 SQLite 단일 파일로 시작
-- 배포 플랫폼의 filesystem persistence가 불명확하거나 제한되면 cache는 best-effort로 두고,
-  필요 시 Redis/Postgres cache로 교체
+**수동 설정 체크리스트**:
+- Render Dashboard → New → Web Service
+- GitHub repository 선택
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- Environment Variables에 `.env` 값을 직접 입력하되, `.env` 파일은 업로드하지 않음
+- 발표 전 5분 이내에 `/health`, `/ready`, `/docs`를 열어 cold start를 미리 해소
 
-#### 작업 19. Deployment Smoke Test & Release Notes
+#### 작업 19. Render Smoke Test & Demo Release Notes
 
 **완료 조건**:
-- 배포 URL 대상으로 smoke test script 실행
+- Render 배포 URL 대상으로 smoke test script 실행
 - `/health` 200 확인
+- `/ready` 200 또는 누락 설정이 명확히 드러나는 503 확인 후 수정
+- `/docs`, `/openapi.json` 접근 확인
 - `/api/v1/search` 최소 1회 성공 확인
-- `/api/v1/patents/{id}` 최소 1회 성공 확인
-- `/api/v1/patents/{id}/summary` 최소 1회 성공 확인
-- 실패 시 rollback 또는 env var 수정 절차 문서화
+- `/api/v1/patents/{id}` mock 상세 조회 최소 1회 성공 확인
+- `/api/v1/patents/{id}/summary` 실제 KIPRIS/Gemini 호출 최소 1회 성공 확인
+- 실패 시 Render dashboard에서 env var 수정 또는 이전 deploy rollback 절차 문서화
+- 발표용 known limitations 정리:
+  - 무료 인스턴스 cold start 가능
+  - SQLite cache는 재시작 후 사라질 수 있음
+  - KIPRIS/Gemini 호출 한도 때문에 발표 시 live 호출은 최소화
 
 **산출물**:
 - `scripts/smoke_test_deployed_api.py`
@@ -927,9 +959,9 @@ venv/bin/python -m pytest
   - [x] 작업 15. Observability & Runtime Guardrails
   - [x] 작업 16. Backend Evaluation Script
 - [ ] **Phase 4**
-  - [ ] 작업 17. Production Runtime Configuration
-  - [ ] 작업 18. Deploy Backend Server
-  - [ ] 작업 19. Deployment Smoke Test & Release Notes
+  - [ ] 작업 17. Render Demo Runtime Configuration
+  - [ ] 작업 18. Render Web Service Deploy
+  - [ ] 작업 19. Render Smoke Test & Demo Release Notes
 
 ### 8.2 의사결정 로그
 
@@ -965,11 +997,13 @@ venv/bin/python -m pytest
 | 2026-05-13 | Observability & Runtime Guardrails 검증 완료 | 표적 관측성 테스트 41개와 전체 offline 테스트 64개 통과 |
 | 2026-05-13 | Backend Evaluation Script 구현 | 평가 쿼리, benchmark script, 검색 품질 평가 문서를 추가 |
 | 2026-05-13 | Backend Evaluation Script 검증 완료 | 표적 benchmark 테스트 18개, mock benchmark CLI, 전체 offline 테스트 67개 통과 |
+| 2026-05-14 | Phase 4 배포 target을 Render Free Web Service로 고정 | 기말 프로젝트 시연용 배포이므로 제품 운영보다 단순성, 무료 사용, 발표 전 검증을 우선 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.26 | 2026-05-14 | Phase 4를 Render Free Web Service 기반 기말 프로젝트 시연용 배포 계획으로 재정의 |
 | v1.25 | 2026-05-13 | 작업 16 검증 결과와 완료 상태 반영 |
 | v1.24 | 2026-05-13 | 작업 16 benchmark 구현 상태와 검증 예정 항목 반영 |
 | v1.23 | 2026-05-13 | 작업 15 검증 결과와 완료 상태 반영 |
@@ -1009,7 +1043,7 @@ venv/bin/python -m pytest
 - [OpenAI API Reference](https://platform.openai.com/docs/api-reference)
 - [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
 - [Render FastAPI 배포 문서](https://render.com/docs/deploy-fastapi)
-- [Railway FastAPI 배포 문서](https://docs.railway.com/guides/fastapi)
+- [Render Free Web Service 제한](https://render.com/docs/free)
 - [NestJS 공식 문서](https://docs.nestjs.com/introduction)
 - [Go net/http 공식 문서](https://pkg.go.dev/net/http)
 
@@ -1029,17 +1063,17 @@ venv/bin/python -m pytest
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료, Phase 4 Render 시연용 배포 계획 확정
 
 **즉시 할 일**:
 1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 Phase 4 작업 17 Production Runtime Configuration 진행
+2. 사용자 컨펌 후 Phase 4 작업 17 Render Demo Runtime Configuration 진행
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."
 > "작업 4 Mock 서버 v1을 만들어줘. 이전 대화에서 논의한 단순 버전 main.py 구조 따라서."
 > "작업 8 Query Builder를 구현해줘. 프롬프트는 app/prompts/extract_keywords.txt에 있는 걸 사용."
-> "작업 18 Deploy Backend Server를 진행해줘. 배포 target과 smoke test 계획부터 보고해줘."
+> "작업 18 Render Web Service Deploy를 진행해줘. Render 설정값과 smoke test 계획부터 보고해줘."
 
 ---
 
