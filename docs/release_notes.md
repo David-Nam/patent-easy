@@ -33,12 +33,15 @@
 - `/docs` Swagger UI 확인
 - `/openapi.json` 정상 응답 확인
 
-작업 19에서 확인할 항목:
+작업 19에서 확인한 항목:
 
-- `scripts/smoke_test_deployed_api.py` 실행
+- `scripts/smoke_test_deployed_api.py --skip-summary` 실행 성공
+- `scripts/smoke_test_deployed_api.py` 전체 실행 성공
 - `/api/v1/search` 실제 검색 성공
 - `/api/v1/patents/10-2023-0098765` mock 상세 조회 성공
 - `/api/v1/patents/10-2023-0147601/summary` 실제 KIPRIS/Gemini 요약 성공
+- 전체 smoke test 결과: 6개 step 통과, 실패 0개
+- 전체 smoke test 실행 시각: 2026-05-14T06:55:01Z
 
 ## Known Limitations
 

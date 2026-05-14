@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.31
+> **문서 버전**: v1.32
 > **최종 수정일**: 2026-05-14
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. Phase 4 작업 17~18 완료. 작업 19 smoke test 검증 중 발견된 Query Builder Gemini 요청 오류 수정 완료, Render 재배포 대기.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. Phase 4 작업 17~19 완료. Render 배포 smoke test까지 통과.
 
 ---
 
@@ -971,6 +971,23 @@ DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scrip
 - 재배포 완료 후 `scripts/smoke_test_deployed_api.py --skip-summary` 재실행
 - 통과하면 `scripts/smoke_test_deployed_api.py` 전체 실행
 
+**재배포 후 최종 검증 결과**:
+- quick smoke test:
+  - `DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scripts/smoke_test_deployed_api.py --skip-summary`
+  - 6개 step 통과, 실패 0개
+  - `/api/v1/search` 200 확인
+  - 검색 결과 3개, 첫 결과 `1020180073447`
+- full smoke test:
+  - `DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scripts/smoke_test_deployed_api.py`
+  - 6개 step 통과, 실패 0개
+  - `/health` 200
+  - `/ready` 200, cache/KIPRIS/Gemini configured
+  - `/openapi.json` 200
+  - mock 상세 조회 200
+  - `/api/v1/search` 200
+  - `/api/v1/patents/10-2023-0147601/summary` 200
+  - summary `patent_id=10-2023-0147601`, `tag_count=5`, `is_cached=false`
+
 ---
 
 ## 6.1 테스트 및 검증 전략
@@ -1042,7 +1059,7 @@ DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scrip
 - [ ] **Phase 4**
   - [x] 작업 17. Render Demo Runtime Configuration
   - [x] 작업 18. Render Web Service Deploy
-  - [ ] 작업 19. Render Smoke Test & Demo Release Notes
+  - [x] 작업 19. Render Smoke Test & Demo Release Notes
 
 ### 8.2 의사결정 로그
 
@@ -1081,11 +1098,13 @@ DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scrip
 | 2026-05-14 | Phase 4 배포 target을 Render Free Web Service로 고정 | 기말 프로젝트 시연용 배포이므로 제품 운영보다 단순성, 무료 사용, 발표 전 검증을 우선 |
 | 2026-05-14 | Render Demo Runtime Configuration 완료 | README, `.env.example`, 배포 가이드에 Render 설정값과 무료 플랜 제약을 반영하고 표적 검증 통과 |
 | 2026-05-14 | Render Web Service 배포 완료 | `https://patent-easy-api.onrender.com`에서 `/health`, `/ready`, `/docs`, `/openapi.json` 확인 |
+| 2026-05-14 | Render smoke test 완료 | 재배포 후 검색과 요약 포함 전체 smoke test 6개 step 통과 |
 
 ### 8.3 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.32 | 2026-05-14 | 작업 19 재배포 후 smoke test 최종 성공 결과와 완료 상태 반영 |
 | v1.31 | 2026-05-14 | 작업 19 smoke test 중 발견된 Query Builder Gemini 요청 오류 수정 및 로컬/live 검증 결과 반영 |
 | v1.30 | 2026-05-14 | 작업 19 smoke test script와 demo release notes 구현 상태 및 검증 예정 항목 반영 |
 | v1.29 | 2026-05-14 | 작업 18 Render Web Service 배포 결과와 완료 상태 반영 |
@@ -1151,12 +1170,11 @@ DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scrip
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료, Phase 4 작업 17~18 완료, 작업 19 smoke test script 구현 및 Query Builder Gemini 오류 수정 완료, Render 재배포 대기
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료, Phase 4 작업 17~19 완료
 
 **즉시 할 일**:
-1. 수정사항 commit/push 후 Render 재배포 진행
-2. 재배포 완료 후 작업 19 smoke test 재검증
-3. 검증 성공 시 작업 19 완료 상태 반영 후 commit-message 스킬 사용
+1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
+2. 발표 전 `/health`, `/ready`, `/docs`를 열어 Render cold start 해소
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."

@@ -1,26 +1,61 @@
 # PatentEasy Frontend AI Integration Spec
 
-## Role
+이 문서는 Codex, Claude Code 같은 AI 개발 도구가 PatentEasy 프론트엔드에
+백엔드 API를 연결할 때 읽는 구현 스펙입니다. 사람용 설명은
+`docs/frontend_backend_integration_guide.md`를 기준으로 합니다.
 
-You are configuring a frontend app to consume the PatentEasy backend Mock API.
+## Goal
 
-## Backend Base URL
+Implement a frontend API client for the deployed PatentEasy FastAPI backend and
+wire it into search, patent detail, and summary UI flows.
 
-Use an environment variable:
+## Backend
+
+Use an environment variable for the base URL.
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_API_BASE_URL=https://patent-easy-api.onrender.com
 ```
 
-Do not hard-code the base URL outside the env fallback layer.
+For Vite projects, use:
 
-## API Keys
+```env
+VITE_API_BASE_URL=https://patent-easy-api.onrender.com
+```
 
-No API key is required for frontend Mock API integration.
+Do not hard-code the base URL outside one API client/config layer.
 
-The frontend must not read or send `KIPRIS_API_KEY`, `GEMINI_API_KEY`, or
-`OPENAI_API_KEY`. Those keys are backend-only and are not needed while the
-backend serves Mock search, detail, and summary responses.
+## Security
+
+No frontend API key is required.
+
+The frontend must not read, store, log, or send these server-only variables:
+
+- `KIPRIS_API_KEY`
+- `KIPRIS_API_SUB1_KEY`
+- `KIPRIS_API_SUB2_KEY`
+- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+
+The browser talks only to the PatentEasy backend. It must never call KIPRIS,
+Gemini, or OpenAI directly.
+
+## Current Backend Behavior
+
+| Endpoint | Current behavior |
+|---|---|
+| `POST /api/v1/search` | Live Gemini query building plus live KIPRIS search. |
+| `GET /api/v1/patents/{patent_id}` | Local mock detail data from backend. |
+| `POST /api/v1/patents/{patent_id}/summary` | Live KIPRIS bibliography/claim lookup plus Gemini summary. |
+
+Important: search results come from live KIPRIS, but the detail endpoint is
+currently mock-only. If a search result ID does not exist in mock detail data,
+handle `404 PATENT_NOT_FOUND` as a graceful “detail is not ready” UI state.
+
+Known demo IDs:
+
+- Detail: `10-2023-0098765`
+- Summary: `10-2023-0147601`
 
 ## Required Endpoints
 
@@ -30,14 +65,16 @@ backend serves Mock search, detail, and summary responses.
 GET /health
 ```
 
-Expected response:
+Use only for debugging or optional service status UI.
 
-```json
-{
-  "status": "ok",
-  "service": "patent-easy-backend"
-}
+### Readiness
+
+```http
+GET /ready
 ```
+
+Use only for debugging. Do not block normal user flows on this endpoint unless
+the product explicitly has a backend status view.
 
 ### Search
 
@@ -50,7 +87,7 @@ Request:
 
 ```json
 {
-  "query": "배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능",
+  "query": "전기차 배터리 열관리 시스템",
   "filters": {
     "applicant": null,
     "ipc_codes": null,
@@ -62,25 +99,12 @@ Request:
 }
 ```
 
-Response shape:
+Rules:
 
-```ts
-type SearchResponse = {
-  query: string;
-  extracted: {
-    keywords: string[];
-    ipc_codes: string[];
-    expanded_terms: Record<string, string[]>;
-  };
-  pagination: {
-    page: number;
-    page_size: number;
-    total_count: number;
-    total_pages: number;
-  };
-  results: PatentListItem[];
-};
-```
+- `query` is required, 2 to 500 characters.
+- `page` defaults to `1`.
+- `page_size` defaults to `10`, max `50`.
+- `filters` may be omitted or sent as `{}`.
 
 ### Patent Detail
 
@@ -88,18 +112,11 @@ type SearchResponse = {
 GET /api/v1/patents/{patent_id}
 ```
 
-Response shape:
+Current limitation:
 
-```ts
-type PatentDetail = PatentListItem & {
-  abstract: string;
-  inventors: string[];
-  publication_date: string | null;
-  registration_date: string | null;
-  legal_status: string | null;
-  claims: Claim[];
-};
-```
+- This endpoint reads backend mock data.
+- It may return `404 PATENT_NOT_FOUND` for IDs returned by live search.
+- The UI must handle this without crashing.
 
 ### Summary
 
@@ -112,28 +129,53 @@ Request:
 
 ```json
 {
-  "user_query": "배달앱에서 음식 사진을 찍으면 칼로리를 계산해주는 기능"
+  "user_query": "전기차 배터리 열관리 기능"
 }
 ```
 
-Response shape:
+Rules:
+
+- `user_query` is optional and may be `null`.
+- This endpoint can be slower than search because it may call KIPRIS and Gemini.
+- `is_cached=true` is a successful response.
+
+## TypeScript Contract
 
 ```ts
-type SummaryResponse = {
-  patent_id: string;
-  core_summary: string;
-  business_application: string;
-  key_tags: string[];
-  generated_at: string;
-  is_cached: boolean;
-  disclaimer: string;
+export type ApiErrorBody = {
+  code: string;
+  message: string;
+  details?: Record<string, unknown> | null;
 };
-```
 
-## Shared Types
+export type SearchFilters = {
+  applicant?: string | null;
+  ipc_codes?: string[] | null;
+  year_from?: number | null;
+  year_to?: number | null;
+};
 
-```ts
-type PatentListItem = {
+export type SearchRequest = {
+  query: string;
+  filters?: SearchFilters;
+  page?: number;
+  page_size?: number;
+};
+
+export type ExtractedQuery = {
+  keywords: string[];
+  ipc_codes: string[];
+  expanded_terms: Record<string, string[]>;
+};
+
+export type Pagination = {
+  page: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+};
+
+export type PatentListItem = {
   patent_id: string;
   title: string;
   applicant: string;
@@ -145,38 +187,45 @@ type PatentListItem = {
   kipris_url: string | null;
 };
 
-type Claim = {
+export type Claim = {
   number: number;
   text: string;
 };
 
-type SearchFilters = {
-  applicant?: string | null;
-  ipc_codes?: string[] | null;
-  year_from?: number | null;
-  year_to?: number | null;
+export type PatentDetail = PatentListItem & {
+  abstract: string;
+  inventors: string[];
+  publication_date: string | null;
+  registration_date: string | null;
+  legal_status: string | null;
+  claims: Claim[];
 };
 
-type SearchRequest = {
+export type SearchResponse = {
   query: string;
-  filters?: SearchFilters;
-  page?: number;
-  page_size?: number;
+  extracted: ExtractedQuery;
+  pagination: Pagination;
+  results: PatentListItem[];
+};
+
+export type SummaryRequest = {
+  user_query?: string | null;
+};
+
+export type SummaryResponse = {
+  patent_id: string;
+  core_summary: string;
+  business_application: string;
+  key_tags: string[];
+  generated_at: string;
+  is_cached: boolean;
+  disclaimer: string;
 };
 ```
 
-## Implementation Requirements
+## API Client Requirements
 
-- Create a small API client module for the backend.
-- Read the base URL from `NEXT_PUBLIC_API_BASE_URL`.
-- Default `filters` to an empty object when the UI does not provide filters.
-- Default `page` to `1`.
-- Default `page_size` to `10`.
-- Surface non-2xx responses as user-visible errors.
-- Do not call KIPRIS or LLM providers directly from the frontend.
-- Do not duplicate Mock data in the frontend.
-
-## Suggested API Client Interface
+Create one API client module with these exported functions:
 
 ```ts
 export async function searchPatents(input: SearchRequest): Promise<SearchResponse>;
@@ -187,11 +236,61 @@ export async function summarizePatent(
 ): Promise<SummaryResponse>;
 ```
 
+Implementation rules:
+
+- Use `fetch` or the project’s existing HTTP client.
+- Prefix all paths with the env-based base URL.
+- Always send `Content-Type: application/json` for JSON requests.
+- Encode `patent_id` path values with `encodeURIComponent`.
+- Parse non-2xx JSON errors as `ApiErrorBody`.
+- Preserve backend `code`, `message`, and `details` for UI decisions.
+- Handle network errors separately from backend JSON errors.
+
+## UI Requirements
+
+Search UI:
+
+- Shows loading while `/api/v1/search` is pending.
+- Shows empty state when `results.length === 0`.
+- Renders `title`, `applicant`, `application_date`, `ipc_codes`,
+  `relevance_score`, `tags`, and `abstract_preview`.
+- Optionally renders `extracted.keywords` and `extracted.ipc_codes`.
+
+Detail UI:
+
+- Calls `getPatentDetail(patentId)` only when a detail view is opened.
+- Renders claims if detail exists.
+- Handles `PATENT_NOT_FOUND` with a non-fatal “detail is not ready” state.
+
+Summary UI:
+
+- Calls `summarizePatent(patentId, userQuery)` on explicit user action.
+- Shows loading because live KIPRIS/Gemini calls can take several seconds.
+- Renders `core_summary`, `business_application`, `key_tags`, and `disclaimer`.
+- Treats `is_cached=true` as normal success.
+
+## Error Handling
+
+Use `code` as the primary branch key.
+
+| code | Expected UI |
+|---|---|
+| `PATENT_NOT_FOUND` | Detail or summary target not found. Show a friendly unavailable state. |
+| `VALIDATION_ERROR` | Ask user to fix the input. |
+| `SEARCH_UPSTREAM_ERROR` | Search provider is temporarily unavailable. |
+| `SUMMARY_UPSTREAM_ERROR` | Summary provider is temporarily unavailable. |
+| `SEARCH_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
+| `SUMMARY_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
+
+Network timeout, failed fetch, and Render cold start may not return JSON. Show a
+generic retryable server connection message in those cases.
+
 ## Acceptance Criteria
 
-- The frontend can search with a natural Korean sentence.
-- Search results render title, applicant, date, IPC codes, score, tags, and abstract preview.
-- Clicking a result can fetch detail by `patent_id`.
-- The detail page or panel renders claims.
-- The summary action calls the summary endpoint and renders `core_summary`, `business_application`, `key_tags`, and `disclaimer`.
-- The API base URL can be changed without code changes.
+- API base URL can be changed without source code edits.
+- Frontend contains no KIPRIS/Gemini/OpenAI key.
+- Search works against `https://patent-easy-api.onrender.com`.
+- Detail view handles both success and `PATENT_NOT_FOUND`.
+- Summary action works for `10-2023-0147601`.
+- Loading, empty, backend error, and network error states are visible.
+- No mock patent dataset is duplicated in the frontend.

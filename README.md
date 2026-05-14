@@ -201,4 +201,6 @@ venv/bin/python scripts/benchmark.py --mode mock --cache off
 | `docs/release_notes.md` | Render Demo 릴리스 상태와 known limitations |
 | `docs/kipris_api_research.md` | KIPRIS Plus API 검증 결과 |
 | `docs/keyword_prompt_design.md` | 키워드 추출 프롬프트 설계 |
-| `docs/frontend_mock_api_guide.md` | 프론트엔드 연동 가이드 |
+| `docs/frontend_backend_integration_guide.md` | 배포 백엔드 기준 프론트엔드 연동 가이드 |
+| `docs/frontend_ai_integration.md` | AI 개발 도구용 프론트엔드 연동 스펙 |
+| `docs/frontend_mock_api_guide.md` | 초기 로컬 Mock API 참고 문서 |

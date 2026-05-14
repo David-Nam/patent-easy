@@ -653,4 +653,6 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 | `docs/backend_test_plan.md` | 테스트 그룹과 품질 게이트 |
 | `docs/backend_evaluation_report.md` | 검색 품질 benchmark |
 | `docs/kipris_api_research.md` | KIPRIS API 응답 구조 조사 |
-| `docs/frontend_mock_api_guide.md` | frontend mock 연동 가이드 |
+| `docs/frontend_backend_integration_guide.md` | 배포 백엔드 기준 frontend 연동 가이드 |
+| `docs/frontend_ai_integration.md` | AI 개발 도구용 frontend 연동 스펙 |
+| `docs/frontend_mock_api_guide.md` | 초기 local mock API 참고 문서 |
