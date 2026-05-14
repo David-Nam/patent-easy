@@ -40,13 +40,19 @@ def test_gemini_provider_posts_structured_output_request():
             requests.append(request)
             body = json.loads(request.content.decode("utf-8"))
             assert request.url.path == "/v1beta/models/gemini-test:generateContent"
-            assert request.url.params["key"] == "gemini-key"
+            assert "key" not in request.url.params
+            assert request.headers["x-goog-api-key"] == "gemini-key"
             assert body["generationConfig"]["responseMimeType"] == "application/json"
-            assert body["generationConfig"]["responseSchema"]["required"] == [
+            assert "responseSchema" not in body["generationConfig"]
+            assert body["generationConfig"]["temperature"] == 0.1
+            assert body["generationConfig"]["responseJsonSchema"]["required"] == [
                 "keywords",
                 "ipc_codes",
                 "expanded_terms",
             ]
+            assert body["generationConfig"]["responseJsonSchema"]["properties"]["expanded_terms"][
+                "additionalProperties"
+            ] == {"type": "array", "items": {"type": "string"}}
             return httpx.Response(200, json=_gemini_response(_valid_extracted_payload()))
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))

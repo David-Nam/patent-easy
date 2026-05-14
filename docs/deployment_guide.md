@@ -97,6 +97,41 @@ $BACKEND_URL/docs
 `/ready`가 `503`을 반환하면 정상적인 실패일 수 있습니다. 응답의 `checks`에서
 어떤 환경변수가 빠졌는지 확인한 뒤 Render Dashboard에서 수정합니다.
 
+## 배포 Smoke Test
+
+배포 URL의 핵심 API를 한 번에 확인할 때는 다음 스크립트를 사용합니다.
+
+```bash
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
+  venv/bin/python scripts/smoke_test_deployed_api.py
+```
+
+이 명령은 다음 endpoint를 순서대로 호출합니다.
+
+- `GET /health`
+- `GET /ready`
+- `GET /openapi.json`
+- `GET /api/v1/patents/10-2023-0098765`
+- `POST /api/v1/search`
+- `POST /api/v1/patents/10-2023-0147601/summary`
+
+`/api/v1/search`와 `/summary`는 배포 서버에서 KIPRIS/Gemini를 실제로 호출합니다.
+요약 호출을 잠시 아끼고 싶으면 빠른 점검용으로만 `--skip-summary`를 사용합니다.
+최종 발표 전 smoke test에서는 `--skip-summary` 없이 실행합니다.
+
+```bash
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
+  venv/bin/python scripts/smoke_test_deployed_api.py --skip-summary
+```
+
+결과를 파일로 남기려면 `--output`을 사용합니다.
+
+```bash
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
+  venv/bin/python scripts/smoke_test_deployed_api.py \
+  --output artifacts/deployment_smoke_latest.json
+```
+
 ## 현재 시연용 배포 정보
 
 | 항목 | 값 |
@@ -132,4 +167,5 @@ $BACKEND_URL/docs
 | `README.md` | 설치, 실행, Render 설정 요약 |
 | `docs/api_reference.md` | API 요청/응답 상세 |
 | `docs/backend_test_plan.md` | 로컬/Live/배포 검증 전략 |
+| `docs/release_notes.md` | 발표용 릴리스 상태와 known limitations |
 | `DEVELOPMENT_PLAN.md` | Phase 4 작업 계획 |

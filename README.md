@@ -82,6 +82,14 @@ sleep 이후 local SQLite cache 파일이 사라질 수 있습니다. 이 프로
 배포 후에는 `/health`, `/ready`, `/docs`, `/openapi.json` 순서로 확인합니다.
 자세한 절차는 `docs/deployment_guide.md`를 참고합니다.
 
+배포 URL 기준 smoke test는 다음 명령으로 실행합니다. 이 명령은 KIPRIS/Gemini를
+실제로 호출하므로 발표 리허설 또는 배포 확인 시점에만 실행합니다.
+
+```bash
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
+  venv/bin/python scripts/smoke_test_deployed_api.py
+```
+
 ## 주요 API
 
 | Method | Path | 설명 |
@@ -190,6 +198,7 @@ venv/bin/python scripts/benchmark.py --mode mock --cache off
 | `docs/backend_test_plan.md` | 백엔드 테스트 및 품질 게이트 |
 | `docs/backend_evaluation_report.md` | 검색 품질 평가 방법과 benchmark 실행 가이드 |
 | `docs/deployment_guide.md` | Render 시연용 배포 설정과 점검 절차 |
+| `docs/release_notes.md` | Render Demo 릴리스 상태와 known limitations |
 | `docs/kipris_api_research.md` | KIPRIS Plus API 검증 결과 |
 | `docs/keyword_prompt_design.md` | 키워드 추출 프롬프트 설계 |
 | `docs/frontend_mock_api_guide.md` | 프론트엔드 연동 가이드 |

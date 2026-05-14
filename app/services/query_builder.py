@@ -94,11 +94,16 @@ class QueryBuilder:
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "responseSchema": _gemini_response_schema(),
+                "responseJsonSchema": _gemini_response_schema(),
+                "temperature": 0.1,
             },
         }
         self.provider_call_count += 1
-        response = await self._post_json(url, payload, params={"key": api_key})
+        response = await self._post_json(
+            url,
+            payload,
+            headers={"x-goog-api-key": api_key},
+        )
         self._log_token_usage("gemini", self.settings.gemini_model, response)
         return _extract_gemini_text(response)
 
@@ -249,15 +254,15 @@ def _optional_int(value: Any) -> int | None:
 
 def _gemini_response_schema() -> dict[str, Any]:
     return {
-        "type": "OBJECT",
+        "type": "object",
         "properties": {
-            "keywords": {"type": "ARRAY", "items": {"type": "STRING"}},
-            "ipc_codes": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "keywords": {"type": "array", "items": {"type": "string"}},
+            "ipc_codes": {"type": "array", "items": {"type": "string"}},
             "expanded_terms": {
-                "type": "OBJECT",
+                "type": "object",
                 "additionalProperties": {
-                    "type": "ARRAY",
-                    "items": {"type": "STRING"},
+                    "type": "array",
+                    "items": {"type": "string"},
                 },
             },
         },

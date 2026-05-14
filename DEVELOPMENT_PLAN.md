@@ -2,7 +2,7 @@
 
 > **프로젝트**: 생성형 AI의 이해와 활용 (GITA404-1) 7팀 — AI 기반 특허 검색 서비스
 > **담당**: 백엔드 / AI (남준우)
-> **문서 버전**: v1.29
+> **문서 버전**: v1.31
 > **최종 수정일**: 2026-05-14
 > **개발 기간**: 2026-05-01 ~ 2026-06-09 (Phase 2~4)
 
@@ -16,7 +16,7 @@
 - "Phase X 작업 N번"과 같이 명시적으로 작업 단위를 참조하세요.
 - Codex는 작업을 단계별로 실행하고, 각 단계가 끝날 때마다 구현 요약과 검증 방법을 보고한 뒤 검증을 진행하세요.
 
-**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. Phase 4 작업 17~18 완료. 다음 작업은 작업 19 Render Smoke Test & Demo Release Notes.
+**현재 진행 상태**: Phase 2-A 작업 1~5 및 Phase 2-B 작업 6~11 완료, 작업 12 pending. Phase 3 작업 13~16 완료. Phase 4 작업 17~18 완료. 작업 19 smoke test 검증 중 발견된 Query Builder Gemini 요청 오류 수정 완료, Render 재배포 대기.
 
 ---
 
@@ -921,6 +921,56 @@ venv/bin/python -m pytest tests/test_observability.py tests/test_openapi_contrac
 - `docs/deployment_guide.md`
 - `docs/release_notes.md`
 
+**구현 내용**:
+- `scripts/smoke_test_deployed_api.py` 추가
+  - 배포 URL 기준 `/health`, `/ready`, `/openapi.json`, mock 상세, 검색, 요약 호출
+  - 기본 URL은 `https://patent-easy-api.onrender.com`
+  - `DEPLOYED_API_BASE_URL`, `--base-url`, `--skip-summary`, `--output` 지원
+- `tests/test_deployment_smoke.py` 추가
+  - smoke script의 URL 정규화, readiness/OpenAPI 응답 검증, 결과 요약 로직 테스트
+- `docs/deployment_guide.md`에 smoke test 실행 방법과 결과 저장 방법 추가
+- `docs/backend_test_plan.md`에 Render 배포 smoke test 그룹 추가
+- README에 Render smoke test 실행 명령과 release notes 링크 추가
+- `docs/release_notes.md`에 v0.1.0 Render Demo 릴리스 노트, 포함 기능, known limitations 작성
+
+**검증 예정 명령**:
+```bash
+venv/bin/python -m pytest tests/test_deployment_smoke.py
+git diff --check -- scripts/smoke_test_deployed_api.py tests/test_deployment_smoke.py docs/deployment_guide.md docs/backend_test_plan.md docs/release_notes.md README.md DEVELOPMENT_PLAN.md
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scripts/smoke_test_deployed_api.py --skip-summary
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scripts/smoke_test_deployed_api.py
+```
+
+**검증 중 발견된 이슈와 수정**:
+- 배포 URL smoke test에서 `POST /api/v1/search`가 `502 SEARCH_UPSTREAM_ERROR`로 실패
+- 원인: `QueryBuilder`의 Gemini structured output 요청이 `responseSchema` 형식과
+  query parameter key를 사용해 Gemini가 `HTTP 400`을 반환
+- 수정:
+  - `app/services/query_builder.py`에서 Gemini 요청을 `responseJsonSchema`와
+    `x-goog-api-key` header 방식으로 변경
+  - schema type을 JSON Schema 방식의 lowercase 값으로 변경
+  - `tests/test_query_builder.py`에 Gemini payload 회귀 검증 보강
+  - `tests/test_query_builder_live.py` 추가
+  - `docs/backend_test_plan.md`에 Query Builder live 검증 그룹 추가
+
+**현재 검증 결과**:
+- `venv/bin/python -m pytest tests/test_deployment_smoke.py` 4개 통과
+- `git diff --check -- ...` 통과
+- `DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com venv/bin/python scripts/smoke_test_deployed_api.py --skip-summary`
+  - `/health`, `/ready`, `/openapi.json`, mock 상세 통과
+  - `/api/v1/search`는 배포 서버의 이전 코드에서 `LLM provider returned HTTP 400`으로 실패
+- 수정 후 로컬 표적 테스트:
+  - `venv/bin/python -m pytest tests/test_query_builder.py tests/test_query_builder_live.py tests/test_search_api.py tests/test_deployment_smoke.py`
+  - 18개 통과, live marker 1개 skip
+- 수정 후 Gemini live Query Builder 테스트:
+  - `RUN_LIVE_LLM=1 venv/bin/python -m pytest tests/test_query_builder_live.py -m live_llm -s`
+  - 1개 통과
+
+**다음 검증 필요**:
+- 수정사항 commit/push 후 Render 자동 재배포
+- 재배포 완료 후 `scripts/smoke_test_deployed_api.py --skip-summary` 재실행
+- 통과하면 `scripts/smoke_test_deployed_api.py` 전체 실행
+
 ---
 
 ## 6.1 테스트 및 검증 전략
@@ -1036,6 +1086,8 @@ venv/bin/python -m pytest tests/test_observability.py tests/test_openapi_contrac
 
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
+| v1.31 | 2026-05-14 | 작업 19 smoke test 중 발견된 Query Builder Gemini 요청 오류 수정 및 로컬/live 검증 결과 반영 |
+| v1.30 | 2026-05-14 | 작업 19 smoke test script와 demo release notes 구현 상태 및 검증 예정 항목 반영 |
 | v1.29 | 2026-05-14 | 작업 18 Render Web Service 배포 결과와 완료 상태 반영 |
 | v1.28 | 2026-05-14 | 작업 17 검증 결과와 완료 상태 반영 |
 | v1.27 | 2026-05-14 | 작업 17 Render Demo Runtime Configuration 구현 상태와 검증 예정 항목 반영 |
@@ -1099,11 +1151,12 @@ venv/bin/python -m pytest tests/test_observability.py tests/test_openapi_contrac
 
 ## 10. 다음 작업 (Claude Code 진입 시 여기서 시작)
 
-**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료, Phase 4 작업 17~18 완료
+**현재 상태**: Phase 2-A 작업 1~5 완료, Phase 2-B 작업 6~11 완료, 작업 12 pending, Phase 3 작업 13~16 완료, Phase 4 작업 17~18 완료, 작업 19 smoke test script 구현 및 Query Builder Gemini 오류 수정 완료, Render 재배포 대기
 
 **즉시 할 일**:
-1. 사용자 컨펌 후 commit-message 스킬 사용 또는 추가 검증 진행
-2. 사용자 컨펌 후 Phase 4 작업 19 Render Smoke Test & Demo Release Notes 진행
+1. 수정사항 commit/push 후 Render 재배포 진행
+2. 재배포 완료 후 작업 19 smoke test 재검증
+3. 검증 성공 시 작업 19 완료 상태 반영 후 commit-message 스킬 사용
 
 **Claude Code에게 작업 요청 시 예시**:
 > "DEVELOPMENT_PLAN.md를 읽고 Phase 2-A 작업 1을 진행해줘. 환경 셋업과 폴더 구조 생성부터 시작."
