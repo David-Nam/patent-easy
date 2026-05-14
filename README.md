@@ -47,6 +47,41 @@ uvicorn app.main:app --reload --port 8000
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
+## Render 시연용 배포 설정
+
+기말 프로젝트 시연용 배포 target은 Render Free Web Service입니다. Render에서는
+`.env` 파일을 업로드하지 않고, Dashboard의 Environment Variables에 값을 직접
+입력합니다.
+
+| 항목 | 값 |
+|---|---|
+| Runtime | Python |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Instance Type | Free |
+
+Render에 등록할 주요 환경변수는 다음과 같습니다.
+
+| 변수 | Render 값 |
+|---|---|
+| `APP_ENV` | `production` |
+| `APP_DEBUG` | `false` |
+| `KIPRIS_API_KEY` | 실제 KIPRIS Plus API 키 |
+| `LLM_PROVIDER` | `gemini` |
+| `GEMINI_API_KEY` | 실제 Gemini API 키 |
+| `CACHE_DB_PATH` | `/tmp/patent-easy-cache.sqlite` |
+| `CACHE_TTL_SEARCH` | `86400` |
+| `CACHE_TTL_DETAIL` | `604800` |
+| `CACHE_TTL_SUMMARY` | `2592000` |
+| `CORS_ORIGINS` | 배포된 프론트엔드 origin, 없으면 로컬 개발 origin |
+
+Render 무료 Web Service는 15분 동안 요청이 없으면 sleep될 수 있고, 재시작이나
+sleep 이후 local SQLite cache 파일이 사라질 수 있습니다. 이 프로젝트에서는 제품
+운영이 아니라 발표 시연용 배포이므로 SQLite cache를 임시 cache로 취급합니다.
+
+배포 후에는 `/health`, `/ready`, `/docs`, `/openapi.json` 순서로 확인합니다.
+자세한 절차는 `docs/deployment_guide.md`를 참고합니다.
+
 ## 주요 API
 
 | Method | Path | 설명 |
@@ -154,6 +189,7 @@ venv/bin/python scripts/benchmark.py --mode mock --cache off
 | `docs/api_reference.md` | API 전체 기능, 요청/응답 예시, 에러 코드 |
 | `docs/backend_test_plan.md` | 백엔드 테스트 및 품질 게이트 |
 | `docs/backend_evaluation_report.md` | 검색 품질 평가 방법과 benchmark 실행 가이드 |
+| `docs/deployment_guide.md` | Render 시연용 배포 설정과 점검 절차 |
 | `docs/kipris_api_research.md` | KIPRIS Plus API 검증 결과 |
 | `docs/keyword_prompt_design.md` | 키워드 추출 프롬프트 설계 |
 | `docs/frontend_mock_api_guide.md` | 프론트엔드 연동 가이드 |
