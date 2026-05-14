@@ -97,6 +97,26 @@ $BACKEND_URL/docs
 `/ready`가 `503`을 반환하면 정상적인 실패일 수 있습니다. 응답의 `checks`에서
 어떤 환경변수가 빠졌는지 확인한 뒤 Render Dashboard에서 수정합니다.
 
+## 현재 시연용 배포 정보
+
+| 항목 | 값 |
+|---|---|
+| Public Backend URL | `https://patent-easy-api.onrender.com` |
+| Runtime | Python 3 |
+| Instance Type | Free |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health Check Path | `/health` |
+
+확인 완료 항목:
+
+- Render build 성공
+- Uvicorn startup 성공
+- `/health` 200 확인
+- `/ready` `status=ready` 확인
+- `/docs` Swagger UI 확인
+- `/openapi.json` 정상 응답 확인
+
 ## 발표 전 체크리스트
 
 - 발표 5분 전 `/health`, `/ready`, `/docs`를 열어 cold start를 해소
