@@ -64,7 +64,7 @@ Render Dashboard의 Environment Variables에 다음 값을 등록합니다.
 | `CORS_ORIGINS` | frontend origin 목록 | 쉼표로 구분 |
 | `KIPRIS_API_KEY` | 실제 key | KIPRIS 검색/상세/청구항 호출 |
 | `LLM_PROVIDER` | `gemini` | 기본 LLM provider |
-| `GEMINI_API_KEY` | 실제 key | Gemini keyword/summary 호출 |
+| `GEMINI_API_KEY` | 실제 key | Gemini keyword/summary/chat 호출 |
 | `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Gemini model |
 | `OPENAI_API_KEY` | 비워둠 | OpenAI 전환 시에만 사용 |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI 전환 시 model |
@@ -72,6 +72,7 @@ Render Dashboard의 Environment Variables에 다음 값을 등록합니다.
 | `CACHE_TTL_SEARCH` | `86400` | 검색 cache TTL |
 | `CACHE_TTL_DETAIL` | `604800` | 상세 cache TTL |
 | `CACHE_TTL_SUMMARY` | `2592000` | 요약 cache TTL |
+| `CACHE_TTL_CHAT` | `86400` | 챗봇 cache TTL |
 | `LLM_MONTHLY_BUDGET_USD` | `50` | LLM 비용 guardrail 기준 |
 
 `KIPRIS_API_SUB1_KEY`, `KIPRIS_API_SUB2_KEY`, `KIPRIS_API_SUB3_KEY`는 현재 백엔드가
@@ -119,9 +120,17 @@ DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
 요약 호출을 잠시 아끼고 싶으면 빠른 점검용으로만 `--skip-summary`를 사용합니다.
 최종 발표 전 smoke test에서는 `--skip-summary` 없이 실행합니다.
 
+챗봇까지 확인하려면 `--include-chat`을 추가합니다. 이 옵션은 KIPRIS/Gemini 호출을
+1회 더 사용하므로 발표 직전 전체 점검 때만 실행하는 것을 권장합니다.
+
 ```bash
 DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
   venv/bin/python scripts/smoke_test_deployed_api.py --skip-summary
+```
+
+```bash
+DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
+  venv/bin/python scripts/smoke_test_deployed_api.py --include-chat
 ```
 
 결과를 파일로 남기려면 `--output`을 사용합니다.

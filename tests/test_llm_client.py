@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from app.config import Settings
+from app.schemas.chat import ChatRequest
 from app.schemas.patent import Claim, PatentDetail, PatentListItem
 from app.services.llm_client import (
     LLMClient,
@@ -23,6 +24,23 @@ def test_mock_provider_summarizes_patent():
         assert summary.core_summary
         assert summary.business_application
         assert summary.is_cached is False
+
+    asyncio.run(run())
+
+
+def test_mock_provider_answers_chat_with_sources():
+    async def run() -> None:
+        client = LLMClient(settings=_settings(llm_provider="mock"))
+        response = await client.chat_about_patent(
+            _sample_patent(),
+            ChatRequest(question="이 특허가 배터리 열관리 기능과 관련 있어?"),
+        )
+
+        assert response.patent_id == "10-2023-0147601"
+        assert response.answer
+        assert response.sources
+        assert response.sources[0].type == "claim"
+        assert response.is_cached is False
 
     asyncio.run(run())
 
@@ -63,6 +81,51 @@ def test_gemini_provider_posts_structured_summary_request():
         assert client.last_token_usage is not None
         assert client.last_token_usage.model == "gemini-test"
         assert client.last_token_usage.total_tokens == 42
+
+    asyncio.run(run())
+
+
+def test_gemini_provider_posts_structured_chat_request_and_maps_sources():
+    async def run() -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            body = json.loads(request.content.decode("utf-8"))
+            assert request.url.path == "/v1beta/models/gemini-test:generateContent"
+            assert body["generationConfig"]["responseJsonSchema"]["required"] == [
+                "answer",
+                "source_ids",
+            ]
+            prompt = body["contents"][0]["parts"][0]["text"]
+            assert '"source_id": "claim:1"' in prompt
+            return httpx.Response(200, json=_gemini_response(_chat_payload()))
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = LLMClient(
+                settings=_settings(
+                    llm_provider="gemini",
+                    gemini_api_key="gemini-key",
+                    gemini_model="gemini-test",
+                ),
+                http_client=async_client,
+            )
+            response = await client.chat_about_patent(
+                _sample_patent(),
+                ChatRequest(
+                    question="이 특허가 배터리 열관리 기능과 관련 있어?",
+                    history=[{"role": "user", "content": "핵심을 알려줘."}],
+                ),
+            )
+        finally:
+            await async_client.aclose()
+
+        assert len(requests) == 1
+        assert response.answer == "청구항 1 기준으로 배터리 열관리 기능과 관련이 있습니다."
+        assert response.sources[0].type == "claim"
+        assert response.sources[0].claim_number == 1
+        assert "전기자동차 배터리" in response.sources[0].snippet
 
     asyncio.run(run())
 
@@ -270,6 +333,13 @@ def _rerank_payload() -> dict:
             {"patent_id": "p2", "relevance_score": 97, "tags": ["배터리", "열관리"]},
             {"patent_id": "p1", "relevance_score": 35, "tags": ["표시"]},
         ]
+    }
+
+
+def _chat_payload() -> dict:
+    return {
+        "answer": "청구항 1 기준으로 배터리 열관리 기능과 관련이 있습니다.",
+        "source_ids": ["claim:1", "missing-source"],
     }
 
 

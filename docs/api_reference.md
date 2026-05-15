@@ -13,6 +13,7 @@
 | `POST` | `/api/v1/search` | 자연어 아이디어로 관련 특허 검색 | KIPRIS, LLM 또는 mock LLM |
 | `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 조회 | 현재는 local mock data |
 | `POST` | `/api/v1/patents/{patent_id}/summary` | 특허 청구항 기반 AI 요약 | KIPRIS, LLM 또는 mock LLM |
+| `POST` | `/api/v1/patents/{patent_id}/chat` | 단일 특허 기반 Q&A 챗봇 | KIPRIS, LLM 또는 mock LLM |
 
 ## 문서와 실제 명세 확인 위치
 
@@ -67,6 +68,7 @@ API key가 없습니다.
 | 검색 `/api/v1/search` | Query Builder가 자연어를 키워드로 바꾸고 KIPRIS 검색 API를 호출합니다. |
 | 상세 `/api/v1/patents/{patent_id}` | `data/mock_patents.json`의 local mock 상세 데이터를 반환합니다. |
 | 요약 `/api/v1/patents/{patent_id}/summary` | KIPRIS 서지 상세/청구항 API를 호출한 뒤 LLM으로 요약합니다. |
+| 챗봇 `/api/v1/patents/{patent_id}/chat` | KIPRIS 서지 상세/청구항 API를 호출한 뒤 단일 특허 context Q&A를 수행합니다. |
 
 즉, `GET /api/v1/patents/{patent_id}`는 아직 KIPRIS 실제 상세 API와 연결된
 엔드포인트가 아닙니다. 현재 실제 상세 조회는 요약 서비스 내부에서
@@ -529,6 +531,80 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/summary \
 | `503` | `SUMMARY_CONFIGURATION_ERROR` | `{"source":"kipris","kind":"configuration_error"}` | KIPRIS key 누락 |
 | `503` | `SUMMARY_CONFIGURATION_ERROR` | `{"source":"llm","kind":"configuration_error"}` | LLM provider key 또는 설정 오류 |
 
+## 챗봇 API
+
+### `POST /api/v1/patents/{patent_id}/chat`
+
+단일 특허를 기준으로 사용자의 질문에 답합니다. 전통적인 벡터DB 기반 RAG가 아니라,
+KIPRIS에서 조회한 초록과 청구항을 LLM context로 제공하는 LLM 기반 Q&A 구조입니다.
+
+현재 흐름:
+
+```text
+patent_id
+→ KIPRIS 서지 상세 API
+→ KIPRIS 청구항 API
+→ LLM Q&A
+→ 서버가 근거 snippet 매핑
+→ ChatResponse 반환
+```
+
+#### Request
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "이 특허는 전기차 배터리 열관리 기능과 관련이 있나요?",
+    "user_query": "전기차 배터리 열관리 기능",
+    "history": []
+  }'
+```
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+|---|---|---:|---|---|
+| `question` | string | 예 | 2~500자 | 특허에 대해 묻는 질문 |
+| `user_query` | string 또는 null | 아니오 | 최대 500자 | 사용자의 원래 검색 의도 |
+| `history` | message[] | 아니오 | 최대 6개 | 클라이언트가 보관한 최근 대화 |
+
+`history` item:
+
+```json
+{ "role": "user", "content": "이 특허 핵심이 뭐야?" }
+```
+
+`role`은 `user` 또는 `assistant`만 허용하고, `content`는 1~1000자입니다.
+
+#### Response `200`
+
+```json
+{
+  "patent_id": "10-2023-0147601",
+  "answer": "청구항 1 기준으로 배터리 열관리 기능과 관련이 있습니다.",
+  "sources": [
+    {
+      "type": "claim",
+      "claim_number": 1,
+      "snippet": "전기자동차 배터리의 온도와 주행 데이터를 이용하여..."
+    }
+  ],
+  "generated_at": "2026-05-15T09:00:00Z",
+  "is_cached": false,
+  "disclaimer": "이 답변은 참고용입니다. 정확한 권리범위 판단은 변리사 자문을 받으세요."
+}
+```
+
+#### Chat Error Responses
+
+| HTTP Status | code | details 예시 | 의미 |
+|---:|---|---|---|
+| `404` | `PATENT_NOT_FOUND` | `{"patent_id":"..."}` | 특허 상세 조회 결과 없음 |
+| `422` | `VALIDATION_ERROR` | `{"errors": [...]}` | 요청 형식 오류 |
+| `502` | `CHAT_UPSTREAM_ERROR` | `{"source":"kipris","kind":"timeout"}` | KIPRIS timeout |
+| `502` | `CHAT_UPSTREAM_ERROR` | `{"source":"llm","kind":"provider_error"}` | LLM provider 호출 실패 |
+| `502` | `CHAT_UPSTREAM_ERROR` | `{"source":"llm","kind":"parse_error"}` | LLM JSON/schema 파싱 실패 |
+| `503` | `CHAT_CONFIGURATION_ERROR` | `{"source":"llm","kind":"configuration_error"}` | LLM provider key 또는 설정 오류 |
+
 ## 캐시 동작
 
 백엔드는 SQLite cache를 사용합니다.
@@ -538,6 +614,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/summary \
 | KIPRIS 검색 결과 | 86400초 | `CACHE_TTL_SEARCH` |
 | KIPRIS 상세 결과 | 604800초 | `CACHE_TTL_DETAIL` |
 | LLM 요약 결과 | 2592000초 | `CACHE_TTL_SUMMARY` |
+| LLM 챗봇 답변 | 86400초 | `CACHE_TTL_CHAT` |
 
 캐시 DB 경로:
 

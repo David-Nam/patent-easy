@@ -18,6 +18,7 @@ DEFAULT_DETAIL_PATENT_ID = "10-2023-0098765"
 DEFAULT_SUMMARY_PATENT_ID = "10-2023-0147601"
 DEFAULT_SEARCH_QUERY = "전기차 배터리 열관리 시스템"
 DEFAULT_SUMMARY_QUERY = "전기차 배터리 열관리 기능"
+DEFAULT_CHAT_QUESTION = "이 특허는 전기차 배터리 열관리 기능과 관련이 있나요?"
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class SmokeConfig:
     base_url: str
     timeout: float
     skip_summary: bool
+    include_chat: bool
     output: Path | None
 
 
@@ -45,6 +47,7 @@ def main() -> int:
         base_url=normalize_base_url(args.base_url),
         timeout=args.timeout,
         skip_summary=args.skip_summary,
+        include_chat=args.include_chat,
         output=args.output,
     )
     result = run_smoke_test(config)
@@ -68,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-summary",
         action="store_true",
         help="Skip the summary call to avoid one live KIPRIS/Gemini request during quick checks.",
+    )
+    parser.add_argument(
+        "--include-chat",
+        action="store_true",
+        help="Include the chat call. This uses one additional live KIPRIS/Gemini request.",
     )
     parser.add_argument("--output", type=Path, default=None, help="Optional JSON output path.")
     return parser
@@ -132,6 +140,17 @@ def run_smoke_test(config: SmokeConfig) -> dict[str, Any]:
                     json_body={"user_query": DEFAULT_SUMMARY_QUERY},
                 )
             )
+        if config.include_chat:
+            steps.append(
+                _request_json_step(
+                    client,
+                    "chat",
+                    "POST",
+                    f"/api/v1/patents/{DEFAULT_SUMMARY_PATENT_ID}/chat",
+                    _expect_chat,
+                    json_body={"question": DEFAULT_CHAT_QUESTION, "user_query": DEFAULT_SUMMARY_QUERY},
+                )
+            )
 
     return {
         "run": {
@@ -139,6 +158,7 @@ def run_smoke_test(config: SmokeConfig) -> dict[str, Any]:
             "base_url": config.base_url,
             "timeout": config.timeout,
             "skip_summary": config.skip_summary,
+            "include_chat": config.include_chat,
         },
         "summary": summarize_steps(steps),
         "steps": [asdict(step) for step in steps],
@@ -256,6 +276,7 @@ def _expect_openapi(payload: dict[str, Any]) -> dict[str, Any]:
         "/api/v1/search",
         "/api/v1/patents/{patent_id}",
         "/api/v1/patents/{patent_id}/summary",
+        "/api/v1/patents/{patent_id}/chat",
     }
     missing = sorted(required_paths - set(paths))
     assert not missing, f"OpenAPI missing paths: {', '.join(missing)}"
@@ -297,6 +318,18 @@ def _expect_summary(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "patent_id": payload["patent_id"],
         "tag_count": len(payload.get("key_tags", [])),
+        "is_cached": payload.get("is_cached"),
+    }
+
+
+def _expect_chat(payload: dict[str, Any]) -> dict[str, Any]:
+    assert payload.get("patent_id"), "chat patent_id is required"
+    assert payload.get("answer"), "chat answer is required"
+    sources = payload.get("sources")
+    assert isinstance(sources, list), "chat sources must be a list"
+    return {
+        "patent_id": payload["patent_id"],
+        "source_count": len(sources),
         "is_cached": payload.get("is_cached"),
     }
 

@@ -7,7 +7,7 @@
 ## Goal
 
 Implement a frontend API client for the deployed PatentEasy FastAPI backend and
-wire it into search, patent detail, and summary UI flows.
+wire it into search, patent detail, summary, and patent chat UI flows.
 
 ## Backend
 
@@ -42,11 +42,15 @@ Gemini, or OpenAI directly.
 
 ## Current Backend Behavior
 
+This table describes the current backend code contract. The deployed Render URL
+supports chat only after the task 12 backend changes are deployed.
+
 | Endpoint | Current behavior |
 |---|---|
 | `POST /api/v1/search` | Live Gemini query building plus live KIPRIS search. |
 | `GET /api/v1/patents/{patent_id}` | Local mock detail data from backend. |
 | `POST /api/v1/patents/{patent_id}/summary` | Live KIPRIS bibliography/claim lookup plus Gemini summary. |
+| `POST /api/v1/patents/{patent_id}/chat` | Live KIPRIS bibliography/claim lookup plus Gemini single-patent Q&A. |
 
 Important: search results come from live KIPRIS, but the detail endpoint is
 currently mock-only. If a search result ID does not exist in mock detail data,
@@ -56,6 +60,7 @@ Known demo IDs:
 
 - Detail: `10-2023-0098765`
 - Summary: `10-2023-0147601`
+- Chat: `10-2023-0147601`
 
 ## Required Endpoints
 
@@ -139,6 +144,36 @@ Rules:
 - This endpoint can be slower than search because it may call KIPRIS and Gemini.
 - `is_cached=true` is a successful response.
 
+### Chat
+
+```http
+POST /api/v1/patents/{patent_id}/chat
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "question": "이 특허는 전기차 배터리 열관리 기능과 관련이 있나요?",
+  "user_query": "전기차 배터리 열관리 기능",
+  "history": [
+    { "role": "user", "content": "이 특허 핵심이 뭐야?" },
+    { "role": "assistant", "content": "청구항 1은..." }
+  ]
+}
+```
+
+Rules:
+
+- `question` is required, 2 to 500 characters.
+- `user_query` is optional and may be `null`.
+- `history` is optional, max 6 messages.
+- `role` must be `user` or `assistant`.
+- Backend does not store chat sessions. The frontend owns recent history.
+- This endpoint can be slower than search because it may call KIPRIS and Gemini.
+- `sources` are evidence snippets and should be displayed with the answer.
+
 ## TypeScript Contract
 
 ```ts
@@ -221,6 +256,32 @@ export type SummaryResponse = {
   is_cached: boolean;
   disclaimer: string;
 };
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatRequest = {
+  question: string;
+  user_query?: string | null;
+  history?: ChatMessage[];
+};
+
+export type ChatSource = {
+  type: "abstract" | "claim";
+  snippet: string;
+  claim_number?: number | null;
+};
+
+export type ChatResponse = {
+  patent_id: string;
+  answer: string;
+  sources: ChatSource[];
+  generated_at: string;
+  is_cached: boolean;
+  disclaimer: string;
+};
 ```
 
 ## API Client Requirements
@@ -234,6 +295,10 @@ export async function summarizePatent(
   patentId: string,
   userQuery?: string
 ): Promise<SummaryResponse>;
+export async function chatAboutPatent(
+  patentId: string,
+  input: ChatRequest
+): Promise<ChatResponse>;
 ```
 
 Implementation rules:
@@ -269,18 +334,28 @@ Summary UI:
 - Renders `core_summary`, `business_application`, `key_tags`, and `disclaimer`.
 - Treats `is_cached=true` as normal success.
 
+Chat UI:
+
+- Calls `chatAboutPatent(patentId, input)` on explicit user message submit.
+- Keeps recent chat history client-side and sends it in `history` on each call.
+- Shows loading because live KIPRIS/Gemini calls can take several seconds.
+- Renders `answer`, `sources`, and `disclaimer`.
+- Treats `is_cached=true` as normal success.
+
 ## Error Handling
 
 Use `code` as the primary branch key.
 
 | code | Expected UI |
 |---|---|
-| `PATENT_NOT_FOUND` | Detail or summary target not found. Show a friendly unavailable state. |
+| `PATENT_NOT_FOUND` | Detail, summary, or chat target not found. Show a friendly unavailable state. |
 | `VALIDATION_ERROR` | Ask user to fix the input. |
 | `SEARCH_UPSTREAM_ERROR` | Search provider is temporarily unavailable. |
 | `SUMMARY_UPSTREAM_ERROR` | Summary provider is temporarily unavailable. |
+| `CHAT_UPSTREAM_ERROR` | Chat provider is temporarily unavailable. |
 | `SEARCH_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
 | `SUMMARY_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
+| `CHAT_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
 
 Network timeout, failed fetch, and Render cold start may not return JSON. Show a
 generic retryable server connection message in those cases.
@@ -292,5 +367,6 @@ generic retryable server connection message in those cases.
 - Search works against `https://patent-easy-api.onrender.com`.
 - Detail view handles both success and `PATENT_NOT_FOUND`.
 - Summary action works for `10-2023-0147601`.
+- Chat action works for `10-2023-0147601` and displays evidence snippets.
 - Loading, empty, backend error, and network error states are visible.
 - No mock patent dataset is duplicated in the frontend.

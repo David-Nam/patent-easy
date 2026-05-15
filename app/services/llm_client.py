@@ -4,12 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import Settings, get_settings
+from app.schemas.chat import ChatRequest, ChatResponse, ChatSource
 from app.schemas.patent import PatentDetail, PatentListItem
 from app.schemas.summary import SummaryResponse
 from app.services.mock_llm_client import mock_llm_client
@@ -19,8 +20,11 @@ from app.utils.logger import get_logger
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 SUMMARY_PROMPT_PATH = PROMPTS_DIR / "summarize_patent.txt"
 RERANK_PROMPT_PATH = PROMPTS_DIR / "rerank_results.txt"
+CHAT_PROMPT_PATH = PROMPTS_DIR / "chat_patent.txt"
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+MAX_CHAT_CONTEXT_CHARS = 12_000
+SOURCE_SNIPPET_LIMIT = 220
 
 logger = get_logger(__name__)
 
@@ -50,6 +54,14 @@ class TokenUsage:
     total_tokens: int | None
 
 
+@dataclass(frozen=True)
+class _EvidenceChunk:
+    source_id: str
+    source_type: Literal["abstract", "claim"]
+    claim_number: int | None
+    text: str
+
+
 class _SummaryPayload(BaseModel):
     core_summary: str = Field(..., min_length=1)
     business_application: str = Field(..., min_length=1)
@@ -66,6 +78,11 @@ class _RerankPayload(BaseModel):
     items: list[_RerankedItem] = Field(default_factory=list)
 
 
+class _ChatPayload(BaseModel):
+    answer: str = Field(..., min_length=1)
+    source_ids: list[str] = Field(default_factory=list, max_length=3)
+
+
 class LLMClient:
     def __init__(
         self,
@@ -73,12 +90,14 @@ class LLMClient:
         http_client: httpx.AsyncClient | None = None,
         summary_prompt_path: Path = SUMMARY_PROMPT_PATH,
         rerank_prompt_path: Path = RERANK_PROMPT_PATH,
+        chat_prompt_path: Path = CHAT_PROMPT_PATH,
         max_retries: int = 2,
     ) -> None:
         self.settings = settings or get_settings()
         self.http_client = http_client
         self.summary_prompt_template = summary_prompt_path.read_text(encoding="utf-8")
         self.rerank_prompt_template = rerank_prompt_path.read_text(encoding="utf-8")
+        self.chat_prompt_template = chat_prompt_path.read_text(encoding="utf-8")
         self.max_retries = max_retries
         self.last_token_usage: TokenUsage | None = None
 
@@ -116,6 +135,26 @@ class LLMClient:
             parser=_parse_rerank_payload,
         )
         return _apply_rerank_payload(results, payload)
+
+    async def chat_about_patent(self, patent: PatentDetail, request: ChatRequest) -> ChatResponse:
+        provider = self.settings.llm_provider.lower()
+        if provider == "mock":
+            return mock_llm_client.chat_about_patent(patent, request)
+
+        evidence = _build_evidence_chunks(patent)
+        prompt = self._render_chat_prompt(patent, request, evidence)
+        payload = await self._generate_structured(
+            prompt,
+            schema=_chat_response_schema(provider),
+            parser=_parse_chat_payload,
+        )
+        return ChatResponse(
+            patent_id=patent.patent_id,
+            answer=payload.answer,
+            sources=_resolve_chat_sources(evidence, payload.source_ids),
+            generated_at=datetime.now(timezone.utc),
+            is_cached=False,
+        )
 
     async def _generate_structured(
         self,
@@ -251,6 +290,27 @@ class LLMClient:
         }
         return f"{self.rerank_prompt_template}\n\nRerank context:\n{_json_dumps(context)}"
 
+    def _render_chat_prompt(
+        self,
+        patent: PatentDetail,
+        request: ChatRequest,
+        evidence: list[_EvidenceChunk],
+    ) -> str:
+        context = {
+            "patent": {
+                "patent_id": patent.patent_id,
+                "title": patent.title,
+                "applicant": patent.applicant,
+                "application_date": patent.application_date,
+                "ipc_codes": patent.ipc_codes,
+            },
+            "user_query": request.user_query,
+            "question": request.question,
+            "history": [message.model_dump(mode="json") for message in request.history],
+            "evidence": _evidence_for_prompt(evidence),
+        }
+        return f"{self.chat_prompt_template}\n\nChat context:\n{_json_dumps(context)}"
+
     def _log_token_usage(self, provider: str, model: str, payload: dict[str, Any]) -> None:
         usage = _extract_token_usage(provider, model, payload)
         self.last_token_usage = usage
@@ -288,6 +348,18 @@ def _parse_rerank_payload(raw_text: str) -> _RerankPayload:
         raise LLMParseError("LLM rerank response does not match schema") from exc
 
 
+def _parse_chat_payload(raw_text: str) -> _ChatPayload:
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise LLMParseError("LLM chat response is not valid JSON") from exc
+
+    try:
+        return _ChatPayload.model_validate(payload)
+    except ValidationError as exc:
+        raise LLMParseError("LLM chat response does not match schema") from exc
+
+
 def _apply_rerank_payload(results: list[PatentListItem], payload: _RerankPayload) -> list[PatentListItem]:
     by_id = {item.patent_id: item for item in results}
     ranked: list[PatentListItem] = []
@@ -308,6 +380,82 @@ def _apply_rerank_payload(results: list[PatentListItem], payload: _RerankPayload
 
     ranked.extend(item for item in results if item.patent_id not in seen)
     return ranked
+
+
+def _build_evidence_chunks(patent: PatentDetail) -> list[_EvidenceChunk]:
+    chunks: list[_EvidenceChunk] = []
+    abstract = patent.abstract.strip()
+    if abstract:
+        chunks.append(
+            _EvidenceChunk(
+                source_id="abstract",
+                source_type="abstract",
+                claim_number=None,
+                text=abstract,
+            )
+        )
+    for claim in patent.claims:
+        text = claim.text.strip()
+        if text:
+            chunks.append(
+                _EvidenceChunk(
+                    source_id=f"claim:{claim.number}",
+                    source_type="claim",
+                    claim_number=claim.number,
+                    text=text,
+                )
+            )
+    return chunks
+
+
+def _evidence_for_prompt(evidence: list[_EvidenceChunk]) -> list[dict[str, object]]:
+    rendered: list[dict[str, object]] = []
+    used_chars = 0
+    for chunk in evidence:
+        remaining = MAX_CHAT_CONTEXT_CHARS - used_chars
+        if remaining <= 0:
+            break
+        text = chunk.text[:remaining]
+        rendered.append(
+            {
+                "source_id": chunk.source_id,
+                "type": chunk.source_type,
+                "claim_number": chunk.claim_number,
+                "text": text,
+            }
+        )
+        used_chars += len(text)
+    return rendered
+
+
+def _resolve_chat_sources(evidence: list[_EvidenceChunk], source_ids: list[str]) -> list[ChatSource]:
+    by_id = {chunk.source_id: chunk for chunk in evidence}
+    sources: list[ChatSource] = []
+    seen: set[str] = set()
+    for source_id in source_ids:
+        if source_id in seen:
+            continue
+        chunk = by_id.get(source_id)
+        if chunk is None:
+            continue
+        sources.append(
+            ChatSource(
+                type=chunk.source_type,
+                claim_number=chunk.claim_number,
+                snippet=_source_snippet(chunk.text),
+            )
+        )
+        seen.add(source_id)
+        if len(sources) >= 3:
+            break
+    return sources
+
+
+def _source_snippet(value: str) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= SOURCE_SNIPPET_LIMIT:
+        return normalized
+    return normalized[: SOURCE_SNIPPET_LIMIT - 3] + "..."
 
 
 def _extract_gemini_text(payload: dict[str, Any]) -> str:
@@ -408,6 +556,28 @@ def _rerank_response_schema(provider: str) -> dict[str, Any]:
             }
         },
         "required": ["items"],
+        "additionalProperties": False,
+    }
+
+
+def _chat_response_schema(provider: str) -> dict[str, Any]:
+    if provider == "gemini":
+        return {
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "source_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["answer", "source_ids"],
+            "propertyOrdering": ["answer", "source_ids"],
+        }
+    return {
+        "type": "object",
+        "properties": {
+            "answer": {"type": "string"},
+            "source_ids": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["answer", "source_ids"],
         "additionalProperties": False,
     }
 

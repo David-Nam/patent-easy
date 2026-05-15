@@ -59,6 +59,7 @@ class Settings(BaseModel):
     cache_ttl_search: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_SEARCH", "86400")))
     cache_ttl_detail: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_DETAIL", "604800")))
     cache_ttl_summary: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_SUMMARY", "2592000")))
+    cache_ttl_chat: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_CHAT", "86400")))
 
     llm_monthly_budget_usd: float = Field(
         default_factory=lambda: float(os.getenv("LLM_MONTHLY_BUDGET_USD", "50"))

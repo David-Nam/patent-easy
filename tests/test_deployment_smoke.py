@@ -1,5 +1,6 @@
 from scripts.smoke_test_deployed_api import (
     StepResult,
+    _expect_chat,
     _expect_health,
     _expect_openapi,
     _expect_readiness,
@@ -56,9 +57,19 @@ def test_smoke_expectations_accept_deployed_shapes():
                 "/api/v1/search": {},
                 "/api/v1/patents/{patent_id}": {},
                 "/api/v1/patents/{patent_id}/summary": {},
+                "/api/v1/patents/{patent_id}/chat": {},
             },
         }
-    )["path_count"] == 5
+    )["path_count"] == 6
+
+    assert _expect_chat(
+        {
+            "patent_id": "10-2023-0147601",
+            "answer": "청구항 1 기준으로 관련이 있습니다.",
+            "sources": [{"type": "claim", "claim_number": 1, "snippet": "청구항 일부"}],
+            "is_cached": False,
+        }
+    )["source_count"] == 1
 
 
 def test_summarize_steps_reports_failures():
