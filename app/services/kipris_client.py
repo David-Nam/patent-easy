@@ -116,7 +116,10 @@ class KIPRISClient:
                 "lastvalue": "R",
             },
         )
-        items = [_map_search_item(item, index) for index, item in enumerate(_find_all(root, "PatentUtilityInfo"))]
+        items = [
+            _map_search_item(item, index, self.settings.api_public_base_url)
+            for index, item in enumerate(_find_all(root, "PatentUtilityInfo"))
+        ]
         filtered_items = _apply_filters(items, filters)
         total_count = _search_total_count(root, fallback=len(items))
         if _has_filters(filters):
@@ -152,9 +155,44 @@ class KIPRISClient:
         detail_root = await self._get_xml(detail_endpoint, {"applicationNumber": compact_id})
         claim_root = await self._get_xml(claim_endpoint, {"applicationNumber": compact_id})
         detail = _map_patent_detail(detail_root, claim_root)
+        original_pdf_url = await self.get_original_pdf_url(compact_id, status=detail.status)
+        fallback_original_url = _patent_original_pdf_url(compact_id, self.settings.api_public_base_url, detail.status)
+        if original_pdf_url:
+            detail = detail.model_copy(update={"original_url": original_pdf_url})
+        elif fallback_original_url:
+            detail = detail.model_copy(update={"original_url": fallback_original_url})
         if self.cache is not None:
             self.cache.set(cache_key, detail.model_dump(mode="json"), self.settings.cache_ttl_detail)
         return detail
+
+    async def get_original_pdf_url(self, patent_id: str, status: str | None = None) -> str | None:
+        compact_id = _compact_patent_id(patent_id)
+        if not compact_id:
+            return None
+
+        cache_key = self._full_text_cache_key(compact_id, status)
+        cached_url = self.cache.get(cache_key) if self.cache is not None else None
+        if isinstance(cached_url, str) and cached_url:
+            return cached_url
+
+        for endpoint in self._full_text_pdf_endpoints(status):
+            try:
+                root = await self._get_xml(endpoint, {"applicationNumber": compact_id})
+            except KIPRISError as exc:
+                logger.warning(
+                    "kipris full text lookup failed endpoint=%s error=%s",
+                    endpoint.path,
+                    exc.__class__.__name__,
+                )
+                continue
+
+            pdf_url = _first_file_path(root)
+            if pdf_url:
+                if self.cache is not None:
+                    self.cache.set(cache_key, pdf_url, self.settings.cache_ttl_detail)
+                return pdf_url
+
+        return None
 
     async def _get_xml(self, endpoint: _Endpoint, params: dict[str, str]) -> ET.Element:
         api_key = self.settings.kipris_api_key
@@ -234,9 +272,47 @@ class KIPRISClient:
                 "base_url": self.settings.kipris_base_url,
                 "detail_path": self.settings.kipris_detail_path,
                 "claim_path": self.settings.kipris_claim_path,
+                "full_text_key_param": self.settings.kipris_full_text_key_param,
+                "full_text_paths": [
+                    self.settings.kipris_standard_pub_full_text_path,
+                    self.settings.kipris_standard_ann_full_text_path,
+                    self.settings.kipris_pub_full_text_path,
+                    self.settings.kipris_ann_full_text_path,
+                ],
                 "application_number": compact_id,
             },
         )
+
+    def _full_text_cache_key(self, compact_id: str, status: str | None) -> str:
+        return normalize_cache_key(
+            "kipris:full_text",
+            {
+                "base_url": self.settings.kipris_base_url,
+                "key_param": self.settings.kipris_full_text_key_param,
+                "status": status,
+                "paths": [
+                    self.settings.kipris_standard_pub_full_text_path,
+                    self.settings.kipris_standard_ann_full_text_path,
+                    self.settings.kipris_pub_full_text_path,
+                    self.settings.kipris_ann_full_text_path,
+                ],
+                "application_number": compact_id,
+            },
+        )
+
+    def _full_text_pdf_endpoints(self, status: str | None) -> list[_Endpoint]:
+        key_param = self.settings.kipris_full_text_key_param
+        pub_endpoints = [
+            _Endpoint(path=self.settings.kipris_standard_pub_full_text_path, key_param=key_param),
+            _Endpoint(path=self.settings.kipris_pub_full_text_path, key_param=key_param),
+        ]
+        ann_endpoints = [
+            _Endpoint(path=self.settings.kipris_standard_ann_full_text_path, key_param=key_param),
+            _Endpoint(path=self.settings.kipris_ann_full_text_path, key_param=key_param),
+        ]
+        if status and "등록" in status:
+            return ann_endpoints + pub_endpoints
+        return pub_endpoints + ann_endpoints
 
 
 def _raise_for_service_error(root: ET.Element) -> None:
@@ -253,7 +329,7 @@ def _raise_for_service_error(root: ET.Element) -> None:
         )
 
 
-def _map_search_item(item: ET.Element, index: int) -> PatentListItem:
+def _map_search_item(item: ET.Element, index: int, api_public_base_url: str | None) -> PatentListItem:
     abstract = _first_text(item, "Abstract") or ""
     application_number = _first_text(item, "ApplicationNumber") or ""
     registration_status = _first_text(item, "RegistrationStatus")
@@ -262,7 +338,8 @@ def _map_search_item(item: ET.Element, index: int) -> PatentListItem:
         registration_status=registration_status,
         open_date=_first_text(item, "OpeningDate") or _first_text(item, "PublicDate"),
     )
-    original_url = _kipris_kpat_detail_url(application_number)
+    kipris_url = _kipris_kpat_detail_url(application_number)
+    original_url = _patent_original_pdf_url(application_number, api_public_base_url, status) or kipris_url
     relevance_score = max(0, 100 - (index * 3))
     return PatentListItem(
         patent_id=application_number,
@@ -285,7 +362,7 @@ def _map_search_item(item: ET.Element, index: int) -> PatentListItem:
         abstract_preview=_preview(abstract),
         thumbnail_url=_first_text(item, "ThumbnailPath"),
         drawing_url=_first_text(item, "DrawingPath"),
-        kipris_url=original_url,
+        kipris_url=kipris_url,
         original_url=original_url,
     )
 
@@ -527,6 +604,16 @@ def _first_text(root: ET.Element, tag_name: str) -> str | None:
     return text or None
 
 
+def _first_file_path(root: ET.Element) -> str | None:
+    for path in (_first_text(node, "path") for node in _find_all(root, "item")):
+        if path:
+            return path
+    for path in (_first_text(node, "path") for node in _find_all(root, "filePathInfo")):
+        if path:
+            return path
+    return _first_text(root, "path")
+
+
 def _local_name(tag: str) -> str:
     return tag.split("}", 1)[-1]
 
@@ -596,6 +683,23 @@ def _kipris_kpat_detail_url(patent_id: str | None) -> str | None:
     if not compact_id:
         return None
     return f"https://www.kipris.or.kr/khome/detail/newWindow.do?applno={quote(compact_id)}&right=kpat"
+
+
+def _patent_original_pdf_url(
+    patent_id: str | None,
+    api_public_base_url: str | None,
+    status: str | None = None,
+) -> str | None:
+    compact_id = _compact_patent_id(patent_id or "")
+    if not compact_id:
+        return None
+    path = f"/api/v1/patents/{quote(compact_id)}/original-pdf"
+    if status:
+        pdf_kind = "ann" if "등록" in status else "pub"
+        path = f"{path}?kind={pdf_kind}"
+    if api_public_base_url:
+        return _join_url(api_public_base_url, path)
+    return path
 
 
 def _preview(value: str, limit: int = 120) -> str:

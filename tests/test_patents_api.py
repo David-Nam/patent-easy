@@ -25,6 +25,17 @@ def test_patent_detail_endpoint_returns_kipris_detail():
     assert payload["claims"][0]["number"] == 1
 
 
+def test_patent_original_pdf_endpoint_redirects_to_kipris_pdf():
+    app.dependency_overrides[get_patent_detail_client] = lambda: StaticPatentDetailClient()
+    try:
+        response = client.get("/api/v1/patents/10-2023-0147601/original-pdf", follow_redirects=False)
+    finally:
+        app.dependency_overrides.pop(get_patent_detail_client, None)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf"
+
+
 def test_similar_patents_endpoint_searches_kipris_and_excludes_current_patent():
     static_client = StaticPatentDetailClient()
     app.dependency_overrides[get_patent_detail_client] = lambda: static_client
@@ -161,6 +172,9 @@ class StaticPatentDetailClient:
             legal_status="등록결정(일반)",
             claims=[Claim(number=1, text="전기자동차에 동력을 제공하는 배터리와 제어부를 포함한다.")],
         )
+
+    async def get_original_pdf_url(self, _patent_id, status=None):
+        return "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf"
 
     async def search_patents(self, keywords, filters=None, page=1, page_size=10):
         self.received_keywords = keywords

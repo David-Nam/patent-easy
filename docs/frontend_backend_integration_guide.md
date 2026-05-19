@@ -387,6 +387,7 @@ curl -s -X POST https://patent-easy-api.onrender.com/api/v1/patents/10-2023-0147
 - `results`가 비어 있으면 빈 상태를 보여줍니다.
 - `extracted.keywords`, `extracted.ipc_codes`는 검색 의도를 설명하는 보조 정보로 표시할 수 있습니다.
 - `status`, `registration_number`, `original_url`, `thumbnail_url`을 사용할 수 있습니다.
+- 검색 결과의 `original_url`은 `/api/v1/...` 상대 경로일 수 있으므로, 새 창을 열 때 API base URL 기준으로 절대 URL을 만들어야 합니다.
 - `relevance_score`와 `similarity_score`는 0부터 100까지의 정수입니다.
 
 상세 화면:

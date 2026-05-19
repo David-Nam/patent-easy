@@ -1,8 +1,10 @@
 from functools import lru_cache
 import re
 from typing import Annotated, Any, Protocol
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import RedirectResponse
 
 from app.schemas.patent import PatentDetail, PatentListItem, SimilarPatentsResponse
 from app.services.kipris_client import (
@@ -19,6 +21,9 @@ router = APIRouter(tags=["patents"])
 
 class PatentDetailClientProtocol(Protocol):
     async def get_patent_detail(self, patent_id: str) -> PatentDetail | None:
+        ...
+
+    async def get_original_pdf_url(self, patent_id: str, status: str | None = None) -> str | None:
         ...
 
     async def search_patents(
@@ -50,6 +55,57 @@ async def get_patent_detail(
     client: Annotated[PatentDetailClientProtocol, Depends(get_patent_detail_client)],
 ) -> PatentDetail:
     return await _get_patent_detail_or_raise(patent_id, client)
+
+
+@router.get(
+    "/patents/{patent_id}/original-pdf",
+    response_class=RedirectResponse,
+    status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    responses={
+        status.HTTP_307_TEMPORARY_REDIRECT: {"description": "Redirect to KIPRIS Plus original PDF file path"},
+        status.HTTP_404_NOT_FOUND: error_response("Patent original PDF not found"),
+        status.HTTP_502_BAD_GATEWAY: error_response("KIPRIS upstream error"),
+        status.HTTP_503_SERVICE_UNAVAILABLE: error_response("KIPRIS configuration error"),
+    },
+)
+async def redirect_patent_original_pdf(
+    patent_id: str,
+    client: Annotated[PatentDetailClientProtocol, Depends(get_patent_detail_client)],
+    kind: str = Query(default="auto", pattern="^(auto|ann|pub)$"),
+) -> RedirectResponse:
+    try:
+        original_pdf_url = await client.get_original_pdf_url(patent_id, status=_pdf_kind_status_hint(kind))
+    except KIPRISConfigurationError as exc:
+        raise_api_error(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="ORIGINAL_CONFIGURATION_ERROR",
+            message=str(exc),
+            details={"source": "kipris", "kind": "configuration_error"},
+        )
+    except KIPRISUpstreamError as exc:
+        raise_api_error(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="ORIGINAL_UPSTREAM_ERROR",
+            message=str(exc),
+            details=_kipris_upstream_details(exc),
+        )
+    except KIPRISParseError as exc:
+        raise_api_error(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="ORIGINAL_UPSTREAM_ERROR",
+            message=str(exc),
+            details={"source": "kipris", "kind": "xml_parse_error"},
+        )
+
+    target_url = original_pdf_url or _kipris_detail_url(patent_id)
+    if not target_url:
+        raise_api_error(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="ORIGINAL_NOT_FOUND",
+            message="원문 PDF를 찾을 수 없습니다.",
+            details={"patent_id": patent_id},
+        )
+    return RedirectResponse(target_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @router.get(
@@ -173,6 +229,21 @@ def _ipc_main_group(code: str) -> str | None:
 
 def _compact_patent_id(patent_id: str) -> str:
     return re.sub(r"[^0-9]", "", patent_id)
+
+
+def _kipris_detail_url(patent_id: str) -> str | None:
+    compact_id = _compact_patent_id(patent_id)
+    if not compact_id:
+        return None
+    return f"https://www.kipris.or.kr/khome/detail/newWindow.do?applno={quote(compact_id)}&right=kpat"
+
+
+def _pdf_kind_status_hint(kind: str) -> str | None:
+    if kind == "ann":
+        return "등록"
+    if kind == "pub":
+        return "공개"
+    return None
 
 
 def _kipris_upstream_details(exc: KIPRISUpstreamError) -> dict[str, Any]:

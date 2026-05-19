@@ -56,8 +56,8 @@ def test_search_patents_maps_fixture_records_and_filters():
         assert results[0].registration_date == "2026-04-29"
         assert results[0].registration_number == "1029609060000"
         assert results[0].similarity_score == results[0].relevance_score
-        assert results[0].original_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
-        assert results[0].kipris_url == results[0].original_url
+        assert results[0].original_url == "/api/v1/patents/1020230147601/original-pdf?kind=ann"
+        assert results[0].kipris_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
         assert results[0].thumbnail_url is not None
         assert results[0].drawing_url is not None
         assert len(results[0].abstract_preview) <= 120
@@ -150,6 +150,14 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
                 return _xml_response(_read_fixture("bibliography_detail_20260506T233858Z.xml"))
             if request.url.path == "/claim":
                 return _xml_response(_read_fixture("claim_detail_20260506T233858Z.xml"))
+            if request.url.path == "/standard-ann-pdf":
+                return _xml_response(
+                    "<response><header><resultCode>00</resultCode>"
+                    "<resultMsg>NORMAL SERVICE.</resultMsg></header><body><item>"
+                    "<docName>1020230147601.PDF</docName>"
+                    "<path>http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf</path>"
+                    "</item></body></response>"
+                )
             return httpx.Response(404, text="not found")
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -174,8 +182,8 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
         assert detail.status == "등록"
         assert detail.application_status == "등록"
         assert detail.legal_status == "등록결정(일반)"
-        assert detail.original_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
-        assert detail.kipris_url == detail.original_url
+        assert detail.original_url == "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf"
+        assert detail.kipris_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
         assert detail.thumbnail_url is not None
         assert detail.drawing_url is not None
         assert "B60H 1/32" in detail.ipc_codes
@@ -192,10 +200,13 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
 
         detail_params = requests[0].url.params
         claim_params = requests[1].url.params
+        full_text_params = requests[2].url.params
         assert detail_params["applicationNumber"] == "1020230147601"
         assert detail_params["ServiceKey"] == "test-key"
         assert claim_params["applicationNumber"] == "1020230147601"
         assert claim_params["accessKey"] == "test-key"
+        assert full_text_params["applicationNumber"] == "1020230147601"
+        assert full_text_params["ServiceKey"] == "test-key"
 
     asyncio.run(run())
 
@@ -327,6 +338,14 @@ def test_get_patent_detail_uses_cache_for_repeated_requests(tmp_path):
                 return _xml_response(_read_fixture("bibliography_detail_20260506T233858Z.xml"))
             if request.url.path == "/claim":
                 return _xml_response(_read_fixture("claim_detail_20260506T233858Z.xml"))
+            if request.url.path == "/standard-ann-pdf":
+                return _xml_response(
+                    "<response><header><resultCode>00</resultCode>"
+                    "<resultMsg>NORMAL SERVICE.</resultMsg></header><body><item>"
+                    "<docName>1020230147601.PDF</docName>"
+                    "<path>http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf</path>"
+                    "</item></body></response>"
+                )
             return httpx.Response(404, text="not found")
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -341,9 +360,10 @@ def test_get_patent_detail_uses_cache_for_repeated_requests(tmp_path):
         finally:
             await async_client.aclose()
 
-        assert request_paths == ["/detail", "/claim"]
+        assert request_paths == ["/detail", "/claim", "/standard-ann-pdf"]
         assert first.patent_id == second.patent_id
         assert len(second.claims) == 14
+        assert second.original_url == "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf"
 
     asyncio.run(run())
 
@@ -357,6 +377,11 @@ def _settings(**overrides) -> Settings:
         "kipris_search_path": "/search",
         "kipris_detail_path": "/detail",
         "kipris_claim_path": "/claim",
+        "kipris_full_text_key_param": "ServiceKey",
+        "kipris_pub_full_text_path": "/pub-pdf",
+        "kipris_ann_full_text_path": "/ann-pdf",
+        "kipris_standard_pub_full_text_path": "/standard-pub-pdf",
+        "kipris_standard_ann_full_text_path": "/standard-ann-pdf",
     }
     values.update(overrides)
     return Settings(**values)

@@ -12,6 +12,7 @@
 | `GET` | `/ready` | cache, KIPRIS, LLM 설정 준비 상태 확인 | cache 설정 |
 | `POST` | `/api/v1/search` | 자연어 아이디어로 관련 특허 검색 | KIPRIS, Gemini |
 | `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 조회 | KIPRIS |
+| `GET` | `/api/v1/patents/{patent_id}/original-pdf` | KIPRIS Plus 원문 PDF로 redirect | KIPRIS |
 | `GET` | `/api/v1/patents/{patent_id}/similar` | 기준 특허와 유사한 특허 조회 | KIPRIS |
 | `POST` | `/api/v1/patents/{patent_id}/summary` | 특허 청구항 기반 AI 요약 | KIPRIS, Gemini |
 | `POST` | `/api/v1/patents/{patent_id}/chat` | 단일 특허 기반 Q&A 챗봇 | KIPRIS, Gemini |
@@ -53,7 +54,7 @@ API key가 없습니다.
 
 | 변수 | 사용 위치 | frontend 전달 여부 |
 |---|---|---:|
-| `KIPRIS_API_KEY` | KIPRIS 검색, 서지 상세, 청구항 조회 | 전달 금지 |
+| `KIPRIS_API_KEY` | KIPRIS 검색, 서지 상세, 청구항, 원문 PDF 경로 조회 | 전달 금지 |
 | `GEMINI_API_KEY` | `LLM_PROVIDER=gemini`일 때 키워드 추출/요약 | 전달 금지 |
 | `OPENAI_API_KEY` | `LLM_PROVIDER=openai`일 때 키워드 추출/요약 | 전달 금지 |
 
@@ -67,7 +68,8 @@ API key가 없습니다.
 | 기능 | 현재 구현 |
 |---|---|
 | 검색 `/api/v1/search` | Query Builder가 자연어를 키워드로 바꾸고 KIPRIS 검색 API를 호출합니다. |
-| 상세 `/api/v1/patents/{patent_id}` | KIPRIS 서지 상세/청구항 API를 호출해 상세 정보를 반환합니다. |
+| 상세 `/api/v1/patents/{patent_id}` | KIPRIS 서지 상세/청구항 API를 호출하고, 원문 PDF 경로가 있으면 `original_url`에 반영합니다. |
+| 원문 PDF `/api/v1/patents/{patent_id}/original-pdf` | KIPRIS Plus 원문 PDF 경로 API를 호출해 실제 PDF 파일 경로로 redirect합니다. |
 | 유사특허 `/api/v1/patents/{patent_id}/similar` | KIPRIS 상세에서 제목/IPC를 추출한 뒤 KIPRIS 검색 API로 후보를 반환합니다. |
 | 요약 `/api/v1/patents/{patent_id}/summary` | KIPRIS 서지 상세/청구항 API를 호출한 뒤 LLM으로 요약합니다. |
 | 챗봇 `/api/v1/patents/{patent_id}/chat` | KIPRIS 서지 상세/청구항 API를 호출한 뒤 단일 특허 context Q&A를 수행합니다. |
@@ -319,7 +321,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
       "thumbnail_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
       "drawing_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
       "kipris_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
-      "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
+      "original_url": "/api/v1/patents/1020230147601/original-pdf?kind=ann"
     }
   ]
 }
@@ -366,7 +368,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
 | `thumbnail_url` | string 또는 null | KIPRIS 대표도면 thumbnail URL |
 | `drawing_url` | string 또는 null | KIPRIS 대표도면 원본 크기 URL |
 | `kipris_url` | string 또는 null | KIPRIS 이동 URL. 국내 특허는 KIPRIS 상세 새창 URL |
-| `original_url` | string 또는 null | 원문보기 버튼용 URL. 현재 국내 특허는 KIPRIS 상세 새창 URL을 사용 |
+| `original_url` | string 또는 null | 원문보기 버튼용 URL. 검색 목록에서는 백엔드 redirect endpoint, 상세에서는 가능하면 KIPRIS Plus PDF 파일 경로 |
 
 #### Search Error Responses
 
@@ -388,7 +390,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
 
 특허 상세 정보를 반환합니다.
 
-현재 이 엔드포인트는 KIPRIS 서지 상세 API와 청구항 API를 호출합니다.
+현재 이 엔드포인트는 KIPRIS 서지 상세 API, 청구항 API, 원문 PDF 경로 API를 호출합니다.
 처음 호출은 외부 API 응답 시간만큼 느릴 수 있고, 이후에는 상세 cache TTL 동안
 SQLite cache를 사용할 수 있습니다.
 
@@ -429,7 +431,7 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0147601
   "thumbnail_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
   "drawing_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
   "kipris_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
-  "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
+  "original_url": "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=...",
   "abstract": "본 발명은 전기자동차의 배터리 열관리 시스템 및 이의 운용 방법에 관한 것이다.",
   "inventors": ["김민수", "황인찬", "이상욱", "정연우"],
   "legal_status": "등록결정(일반)",
@@ -526,6 +528,33 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0147601
 }
 ```
 
+## 원문 PDF API
+
+### `GET /api/v1/patents/{patent_id}/original-pdf`
+
+KIPRIS Plus의 공개전문PDF/공고전문PDF API에서 원문 PDF 파일 경로를 조회한 뒤,
+KIPRIS Plus `fileToss.jsp` URL로 `307 Temporary Redirect`합니다. 프론트엔드는
+검색 결과의 상대 `original_url`을 사용할 때 반드시 `NEXT_PUBLIC_API_BASE_URL` 기준으로
+절대 URL을 만든 뒤 새 창을 열어야 합니다.
+
+등록 상태 특허는 공고전문PDF를 먼저 조회하고, 미등록/공개 상태 특허는 공개전문PDF를
+먼저 조회합니다. PDF 경로를 찾지 못하면 KIPRIS 상세 화면으로 fallback redirect합니다.
+`kind=ann`은 공고전문PDF 우선, `kind=pub`은 공개전문PDF 우선, `kind=auto`는 공개전문PDF
+우선 조회를 의미합니다.
+
+#### Request
+
+```bash
+curl -I http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/original-pdf
+```
+
+#### Response `307`
+
+```http
+HTTP/1.1 307 Temporary Redirect
+Location: http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=...
+```
+
 ## 유사특허 API
 
 ### `GET /api/v1/patents/{patent_id}/similar`
@@ -566,7 +595,7 @@ curl -s 'http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/similar?limit=5'
       "tags": [],
       "abstract_preview": "전기자동차 배터리 제어 기술이다.",
       "kipris_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020220033592&right=kpat",
-      "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020220033592&right=kpat"
+      "original_url": "/api/v1/patents/1020220033592/original-pdf?kind=pub"
     }
   ]
 }

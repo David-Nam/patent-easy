@@ -52,7 +52,7 @@
 - SQLite cache는 재시작, redeploy, sleep 이후 사라질 수 있습니다.
 - KIPRIS/Gemini 호출 한도가 있으므로 발표 중 live 검색/요약 호출은 최소화합니다.
 - 운영 환경에서는 `LLM_PROVIDER=mock`을 허용하지 않습니다.
-- `original_url`은 국내 특허의 경우 KIPRIS 상세 새창 URL입니다. KIPRIS가 안정적인 원문 PDF 직링크 규격을 제공하면 해당 URL로 교체합니다.
+- `original_url`은 원문 PDF 조회용입니다. 검색 목록에서는 백엔드 redirect endpoint를 사용하고, 상세 조회에서는 KIPRIS Plus 원문 PDF `fileToss.jsp` 경로를 우선 반환합니다.
 - 현재 KIPRIS 상세 endpoint는 선행기술문헌과 패밀리 정보를 제공하지만, 피인용 목록은 확인되지 않아 `cited_by_patents=[]`, `cited_by_count=null`로 반환합니다.
 
 ## 발표 전 운영 메모
