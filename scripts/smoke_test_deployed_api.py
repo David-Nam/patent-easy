@@ -14,7 +14,7 @@ import httpx
 
 
 DEFAULT_BASE_URL = "https://patent-easy-api.onrender.com"
-DEFAULT_DETAIL_PATENT_ID = "10-2023-0098765"
+DEFAULT_DETAIL_PATENT_ID = "10-2023-0147601"
 DEFAULT_SUMMARY_PATENT_ID = "10-2023-0147601"
 DEFAULT_SEARCH_QUERY = "전기차 배터리 열관리 시스템"
 DEFAULT_SUMMARY_QUERY = "전기차 배터리 열관리 기능"
@@ -97,10 +97,19 @@ def run_smoke_test(config: SmokeConfig) -> dict[str, Any]:
         steps.append(
             _request_json_step(
                 client,
-                "mock_detail",
+                "detail",
                 "GET",
                 f"/api/v1/patents/{DEFAULT_DETAIL_PATENT_ID}",
                 _expect_detail,
+            )
+        )
+        steps.append(
+            _request_json_step(
+                client,
+                "similar",
+                "GET",
+                f"/api/v1/patents/{DEFAULT_DETAIL_PATENT_ID}/similar?limit=3",
+                _expect_similar,
             )
         )
         steps.append(
@@ -275,6 +284,7 @@ def _expect_openapi(payload: dict[str, Any]) -> dict[str, Any]:
         "/ready",
         "/api/v1/search",
         "/api/v1/patents/{patent_id}",
+        "/api/v1/patents/{patent_id}/similar",
         "/api/v1/patents/{patent_id}/summary",
         "/api/v1/patents/{patent_id}/chat",
     }
@@ -288,12 +298,30 @@ def _expect_openapi(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _expect_detail(payload: dict[str, Any]) -> dict[str, Any]:
-    assert payload.get("patent_id") == DEFAULT_DETAIL_PATENT_ID, "mock detail patent_id mismatch"
-    assert payload.get("claims"), "mock detail must include claims"
+    assert payload.get("patent_id") == DEFAULT_DETAIL_PATENT_ID, "detail patent_id mismatch"
+    assert payload.get("claims"), "detail must include claims"
+    assert payload.get("status"), "detail must include status"
+    assert payload.get("original_url") or payload.get("kipris_url"), "detail must include original URL"
     return {
         "patent_id": payload["patent_id"],
         "title": payload.get("title"),
+        "status": payload.get("status"),
         "claim_count": len(payload.get("claims", [])),
+        "legal_event_count": len(payload.get("legal_events", [])),
+        "cited_count": len(payload.get("cited_patents", [])),
+        "family_count": len(payload.get("family_patents", [])),
+    }
+
+
+def _expect_similar(payload: dict[str, Any]) -> dict[str, Any]:
+    assert payload.get("patent_id") == DEFAULT_DETAIL_PATENT_ID, "similar patent_id mismatch"
+    assert payload.get("strategy") == "kipris_title_ipc_search", "similar strategy mismatch"
+    results = payload.get("results")
+    assert isinstance(results, list), "similar results must be a list"
+    return {
+        "patent_id": payload["patent_id"],
+        "result_count": len(results),
+        "strategy": payload["strategy"],
     }
 
 

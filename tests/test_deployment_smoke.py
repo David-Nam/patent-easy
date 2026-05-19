@@ -1,9 +1,11 @@
 from scripts.smoke_test_deployed_api import (
     StepResult,
     _expect_chat,
+    _expect_detail,
     _expect_health,
     _expect_openapi,
     _expect_readiness,
+    _expect_similar,
     normalize_base_url,
     summarize_steps,
 )
@@ -56,11 +58,33 @@ def test_smoke_expectations_accept_deployed_shapes():
                 "/ready": {},
                 "/api/v1/search": {},
                 "/api/v1/patents/{patent_id}": {},
+                "/api/v1/patents/{patent_id}/similar": {},
                 "/api/v1/patents/{patent_id}/summary": {},
                 "/api/v1/patents/{patent_id}/chat": {},
             },
         }
-    )["path_count"] == 6
+    )["path_count"] == 7
+
+    assert _expect_detail(
+        {
+            "patent_id": "10-2023-0147601",
+            "claims": [{"number": 1, "text": "청구항 일부"}],
+            "title": "전기자동차의 배터리 열관리 시스템 및 이의 운용 방법",
+            "status": "등록",
+            "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
+            "legal_events": [],
+            "cited_patents": [],
+            "family_patents": [],
+        }
+    )["claim_count"] == 1
+
+    assert _expect_similar(
+        {
+            "patent_id": "10-2023-0147601",
+            "strategy": "kipris_title_ipc_search",
+            "results": [],
+        }
+    )["result_count"] == 0
 
     assert _expect_chat(
         {

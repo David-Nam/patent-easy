@@ -19,7 +19,8 @@
 - `GET /docs`: Swagger UI
 - `GET /openapi.json`: OpenAPI JSON
 - `POST /api/v1/search`: 자연어 아이디어 기반 KIPRIS 검색
-- `GET /api/v1/patents/{patent_id}`: local mock 상세 조회
+- `GET /api/v1/patents/{patent_id}`: KIPRIS 상세/청구항 기반 상세 조회
+- `GET /api/v1/patents/{patent_id}/similar`: KIPRIS 제목/IPC 기반 유사특허 후보 조회
 - `POST /api/v1/patents/{patent_id}/summary`: KIPRIS 상세/청구항 기반 Gemini 요약
 
 ## 배포 확인 상태
@@ -38,7 +39,7 @@
 - `scripts/smoke_test_deployed_api.py --skip-summary` 실행 성공
 - `scripts/smoke_test_deployed_api.py` 전체 실행 성공
 - `/api/v1/search` 실제 검색 성공
-- `/api/v1/patents/10-2023-0098765` mock 상세 조회 성공
+- `/api/v1/patents/10-2023-0147601` KIPRIS 상세 조회는 변경 후 재확인 필요
 - `/api/v1/patents/10-2023-0147601/summary` 실제 KIPRIS/Gemini 요약 성공
 - 전체 smoke test 결과: 6개 step 통과, 실패 0개
 - 전체 smoke test 실행 시각: 2026-05-14T06:55:01Z
@@ -49,9 +50,10 @@
 - sleep 후 첫 요청은 cold start 때문에 느릴 수 있습니다.
 - Render 무료 인스턴스의 local filesystem은 ephemeral입니다.
 - SQLite cache는 재시작, redeploy, sleep 이후 사라질 수 있습니다.
-- `GET /api/v1/patents/{patent_id}`는 아직 KIPRIS 실제 상세 API가 아니라
-  `data/mock_patents.json` 기반 mock 상세 조회입니다.
 - KIPRIS/Gemini 호출 한도가 있으므로 발표 중 live 검색/요약 호출은 최소화합니다.
+- 운영 환경에서는 `LLM_PROVIDER=mock`을 허용하지 않습니다.
+- `original_url`은 국내 특허의 경우 KIPRIS 상세 새창 URL입니다. KIPRIS가 안정적인 원문 PDF 직링크 규격을 제공하면 해당 URL로 교체합니다.
+- 현재 KIPRIS 상세 endpoint는 선행기술문헌과 패밀리 정보를 제공하지만, 피인용 목록은 확인되지 않아 `cited_by_patents=[]`, `cited_by_count=null`로 반환합니다.
 
 ## 발표 전 운영 메모
 

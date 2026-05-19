@@ -17,6 +17,7 @@ def test_openapi_documents_core_backend_routes():
     assert "/ready" in paths
     assert "/api/v1/search" in paths
     assert "/api/v1/patents/{patent_id}" in paths
+    assert "/api/v1/patents/{patent_id}/similar" in paths
     assert "/api/v1/patents/{patent_id}/summary" in paths
     assert "/api/v1/patents/{patent_id}/chat" in paths
 
@@ -26,6 +27,10 @@ def test_openapi_response_models_match_public_api_contract():
 
     assert _response_schema_ref(spec, "/api/v1/search", "post", "200") == "#/components/schemas/SearchResponse"
     assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}", "get", "200") == "#/components/schemas/PatentDetail"
+    assert (
+        _response_schema_ref(spec, "/api/v1/patents/{patent_id}/similar", "get", "200")
+        == "#/components/schemas/SimilarPatentsResponse"
+    )
     assert (
         _response_schema_ref(spec, "/api/v1/patents/{patent_id}/summary", "post", "200")
         == "#/components/schemas/SummaryResponse"
@@ -45,6 +50,11 @@ def test_openapi_contains_error_response_statuses_for_real_endpoints():
     assert _response_schema_ref(spec, "/api/v1/search", "post", "502") == "#/components/schemas/ErrorResponse"
     assert _response_schema_ref(spec, "/api/v1/search", "post", "503") == "#/components/schemas/ErrorResponse"
     assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}", "get", "404") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}", "get", "502") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}", "get", "503") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}/similar", "get", "404") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}/similar", "get", "502") == "#/components/schemas/ErrorResponse"
+    assert _response_schema_ref(spec, "/api/v1/patents/{patent_id}/similar", "get", "503") == "#/components/schemas/ErrorResponse"
     assert "404" in spec["paths"]["/api/v1/patents/{patent_id}/summary"]["post"]["responses"]
     assert "502" in spec["paths"]["/api/v1/patents/{patent_id}/summary"]["post"]["responses"]
     assert "503" in spec["paths"]["/api/v1/patents/{patent_id}/summary"]["post"]["responses"]

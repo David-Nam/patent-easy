@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="PatentEasy mock-first backend API.",
+    description="PatentEasy KIPRIS and LLM-backed API.",
 )
 
 app.add_middleware(

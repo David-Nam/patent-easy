@@ -67,7 +67,18 @@ KIPRIS_CLAIM_PATH=/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo
 | `ApplicationDate` | `PatentListItem.application_date` |
 | `InternationalpatentclassificationNumber` | `PatentListItem.ipc_codes` |
 | `Abstract` | `PatentListItem.abstract_preview` |
+| `OpeningDate` / `PublicDate` | `PatentListItem.publication_date` |
+| `OpeningNumber` / `PublicNumber` | `PatentListItem.publication_number` |
+| `RegistrationDate` | `PatentListItem.registration_date` |
+| `RegistrationNumber` | `PatentListItem.registration_number` |
+| `RegistrationStatus` | `PatentListItem.status`, `PatentListItem.application_status` |
+| `ThumbnailPath` | `PatentListItem.thumbnail_url` |
+| `DrawingPath` | `PatentListItem.drawing_url` |
 | `TotalSearchCount` | `SearchResponse.pagination.total_count` |
+
+`PatentListItem.kipris_url`과 `original_url`은 KIPRIS XML에 직접 포함된 값이 아니라
+출원번호 기반으로 생성한 KIPRIS 상세 새창 URL입니다. KIPRIS 화면의 `openWindow('detail', ...)`
+로직은 `/khome/detail/newWindow.do`에 `applno`, `right`를 전달합니다.
 
 ## 서지 상세
 
@@ -89,12 +100,24 @@ KIPRIS_CLAIM_PATH=/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo
 | `biblioSummaryInfo.inventionTitle` | `PatentDetail.title` |
 | `biblioSummaryInfo.applicationDate` | `PatentDetail.application_date` |
 | `biblioSummaryInfo.openDate` | `PatentDetail.publication_date` |
+| `biblioSummaryInfo.openNumber` | `PatentDetail.publication_number` |
 | `biblioSummaryInfo.registerDate` | `PatentDetail.registration_date` |
+| `biblioSummaryInfo.registerNumber` | `PatentDetail.registration_number` |
 | `biblioSummaryInfo.finalDisposal` / `registerStatus` | `PatentDetail.legal_status` |
+| `biblioSummaryInfo.finalDisposal` / `registerStatus` | `PatentDetail.status`, `PatentDetail.application_status` |
 | `applicantInfo.name` | `PatentDetail.applicant` |
 | `inventorInfo.name` | `PatentDetail.inventors` |
 | `ipcInfo.ipcNumber` | `PatentDetail.ipc_codes` |
 | `astrtCont` | `PatentDetail.abstract` |
+| `legalStatusInfo` | `PatentDetail.legal_events[]` |
+| `priorArtDocumentsInfo.documentsNumber` | `PatentDetail.cited_patents[]`, `PatentDetail.citation_count` |
+| `familyInfo` | `PatentDetail.family_patents[]` |
+| `imagePathInfo.path` | `PatentDetail.thumbnail_url` |
+| `imagePathInfo.largePath` | `PatentDetail.drawing_url` |
+
+현재 확인한 서지 상세 응답에는 피인용 목록이 없어서 `cited_by_patents`는 빈 배열,
+`cited_by_count`는 `null`로 둡니다. 피인용 네트워크가 필수이면 별도 KIPRIS
+endpoint 또는 KIPRIS 웹 화면의 안정적인 API 확인이 필요합니다.
 
 ## 청구항 상세
 

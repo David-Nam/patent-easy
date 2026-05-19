@@ -42,23 +42,18 @@ Gemini, or OpenAI directly.
 
 ## Current Backend Behavior
 
-This table describes the current backend code contract. The deployed Render URL
-supports chat only after the task 12 backend changes are deployed.
+This table describes the current backend code contract.
 
 | Endpoint | Current behavior |
 |---|---|
 | `POST /api/v1/search` | Live Gemini query building plus live KIPRIS search. |
-| `GET /api/v1/patents/{patent_id}` | Local mock detail data from backend. |
+| `GET /api/v1/patents/{patent_id}` | Live KIPRIS bibliography/claim lookup. |
 | `POST /api/v1/patents/{patent_id}/summary` | Live KIPRIS bibliography/claim lookup plus Gemini summary. |
 | `POST /api/v1/patents/{patent_id}/chat` | Live KIPRIS bibliography/claim lookup plus Gemini single-patent Q&A. |
 
-Important: search results come from live KIPRIS, but the detail endpoint is
-currently mock-only. If a search result ID does not exist in mock detail data,
-handle `404 PATENT_NOT_FOUND` as a graceful “detail is not ready” UI state.
-
 Known demo IDs:
 
-- Detail: `10-2023-0098765`
+- Detail: `10-2023-0147601`
 - Summary: `10-2023-0147601`
 - Chat: `10-2023-0147601`
 
@@ -117,11 +112,25 @@ Rules:
 GET /api/v1/patents/{patent_id}
 ```
 
-Current limitation:
+Rules:
 
-- This endpoint reads backend mock data.
-- It may return `404 PATENT_NOT_FOUND` for IDs returned by live search.
-- The UI must handle this without crashing.
+- This endpoint calls live KIPRIS bibliography and claim APIs.
+- It can be slower than search on cache miss.
+- Handle `DETAIL_UPSTREAM_ERROR`, `DETAIL_CONFIGURATION_ERROR`, and
+  `PATENT_NOT_FOUND` without crashing.
+- Use `original_url` first for 원문보기 and fall back to `kipris_url`.
+
+### Similar Patents
+
+```http
+GET /api/v1/patents/{patent_id}/similar?limit=5
+```
+
+Rules:
+
+- This endpoint calls live KIPRIS detail and search APIs.
+- `limit` is optional, 1 to 10.
+- Handle `SIMILAR_UPSTREAM_ERROR` as a partial section failure.
 
 ### Summary
 
@@ -186,6 +195,8 @@ export type ApiErrorBody = {
 export type SearchFilters = {
   applicant?: string | null;
   ipc_codes?: string[] | null;
+  cpc_codes?: string[] | null;
+  status?: string | null;
   year_from?: number | null;
   year_to?: number | null;
 };
@@ -216,10 +227,23 @@ export type PatentListItem = {
   applicant: string;
   application_date: string | null;
   ipc_codes: string[];
+  cpc_codes: string[];
+  status: string | null;
+  application_status: string | null;
+  publication_date: string | null;
+  publication_number: string | null;
+  registration_date: string | null;
+  registration_number: string | null;
+  citation_count: number | null;
+  cited_by_count: number | null;
+  similarity_score: number | null;
   relevance_score: number;
   tags: string[];
   abstract_preview: string;
+  thumbnail_url: string | null;
+  drawing_url: string | null;
   kipris_url: string | null;
+  original_url: string | null;
 };
 
 export type Claim = {
@@ -230,10 +254,37 @@ export type Claim = {
 export type PatentDetail = PatentListItem & {
   abstract: string;
   inventors: string[];
-  publication_date: string | null;
-  registration_date: string | null;
   legal_status: string | null;
   claims: Claim[];
+  legal_events: LegalEvent[];
+  cited_patents: PatentReference[];
+  cited_by_patents: PatentReference[];
+  family_patents: PatentReference[];
+};
+
+export type LegalEvent = {
+  status: string | null;
+  document_name: string | null;
+  receipt_date: string | null;
+  receipt_number: string | null;
+};
+
+export type PatentReference = {
+  patent_id: string | null;
+  title: string | null;
+  applicant: string | null;
+  application_date: string | null;
+  status: string | null;
+  relation: string | null;
+  source: string | null;
+  kipris_url: string | null;
+  original_url: string | null;
+};
+
+export type SimilarPatentsResponse = {
+  patent_id: string;
+  strategy: string;
+  results: PatentListItem[];
 };
 
 export type SearchResponse = {
@@ -291,6 +342,10 @@ Create one API client module with these exported functions:
 ```ts
 export async function searchPatents(input: SearchRequest): Promise<SearchResponse>;
 export async function getPatentDetail(patentId: string): Promise<PatentDetail>;
+export async function getSimilarPatents(
+  patentId: string,
+  limit?: number
+): Promise<SimilarPatentsResponse>;
 export async function summarizePatent(
   patentId: string,
   userQuery?: string
@@ -318,14 +373,25 @@ Search UI:
 - Shows loading while `/api/v1/search` is pending.
 - Shows empty state when `results.length === 0`.
 - Renders `title`, `applicant`, `application_date`, `ipc_codes`,
-  `relevance_score`, `tags`, and `abstract_preview`.
+  `status`, `registration_number`, `relevance_score`, `tags`,
+  `abstract_preview`, and `original_url`.
 - Optionally renders `extracted.keywords` and `extracted.ipc_codes`.
 
 Detail UI:
 
 - Calls `getPatentDetail(patentId)` only when a detail view is opened.
-- Renders claims if detail exists.
-- Handles `PATENT_NOT_FOUND` with a non-fatal “detail is not ready” state.
+- Shows loading because live KIPRIS calls can take several seconds.
+- Renders claims, `legal_events`, `cited_patents`, `family_patents`, and
+  status fields if detail exists.
+- Uses `original_url` or `kipris_url` for 원문보기.
+- Handles `DETAIL_UPSTREAM_ERROR`, `DETAIL_CONFIGURATION_ERROR`, and
+  `PATENT_NOT_FOUND` with a non-fatal unavailable/retry state.
+
+Similar Patent UI:
+
+- Calls `getSimilarPatents(patentId)` after the detail view has a target patent.
+- Shows empty state when `results.length === 0`.
+- Treats `SIMILAR_UPSTREAM_ERROR` as a partial-feature failure, not a full detail page failure.
 
 Summary UI:
 
@@ -351,9 +417,13 @@ Use `code` as the primary branch key.
 | `PATENT_NOT_FOUND` | Detail, summary, or chat target not found. Show a friendly unavailable state. |
 | `VALIDATION_ERROR` | Ask user to fix the input. |
 | `SEARCH_UPSTREAM_ERROR` | Search provider is temporarily unavailable. |
+| `DETAIL_UPSTREAM_ERROR` | KIPRIS detail lookup is temporarily unavailable. |
+| `SIMILAR_UPSTREAM_ERROR` | Similar patent lookup is temporarily unavailable. |
 | `SUMMARY_UPSTREAM_ERROR` | Summary provider is temporarily unavailable. |
 | `CHAT_UPSTREAM_ERROR` | Chat provider is temporarily unavailable. |
 | `SEARCH_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
+| `DETAIL_CONFIGURATION_ERROR` | Backend KIPRIS configuration problem. Show service unavailable. |
+| `SIMILAR_CONFIGURATION_ERROR` | Backend KIPRIS configuration problem. Show service unavailable. |
 | `SUMMARY_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
 | `CHAT_CONFIGURATION_ERROR` | Backend configuration problem. Show service unavailable. |
 
@@ -365,7 +435,11 @@ generic retryable server connection message in those cases.
 - API base URL can be changed without source code edits.
 - Frontend contains no KIPRIS/Gemini/OpenAI key.
 - Search works against `https://patent-easy-api.onrender.com`.
-- Detail view handles both success and `PATENT_NOT_FOUND`.
+- Detail view handles success, loading, `DETAIL_UPSTREAM_ERROR`,
+  `DETAIL_CONFIGURATION_ERROR`, and `PATENT_NOT_FOUND`.
+- Detail view uses `original_url` or `kipris_url` for 원문보기.
+- Similar patent section calls `getSimilarPatents` and handles empty/error states.
+- Patent status, legal timeline, cited patents, and family patents use backend fields.
 - Summary action works for `10-2023-0147601`.
 - Chat action works for `10-2023-0147601` and displays evidence snippets.
 - Loading, empty, backend error, and network error states are visible.

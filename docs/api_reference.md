@@ -10,10 +10,11 @@
 |---|---|---|---|
 | `GET` | `/health` | 앱 프로세스 상태 확인 | 없음 |
 | `GET` | `/ready` | cache, KIPRIS, LLM 설정 준비 상태 확인 | cache 설정 |
-| `POST` | `/api/v1/search` | 자연어 아이디어로 관련 특허 검색 | KIPRIS, LLM 또는 mock LLM |
-| `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 조회 | 현재는 local mock data |
-| `POST` | `/api/v1/patents/{patent_id}/summary` | 특허 청구항 기반 AI 요약 | KIPRIS, LLM 또는 mock LLM |
-| `POST` | `/api/v1/patents/{patent_id}/chat` | 단일 특허 기반 Q&A 챗봇 | KIPRIS, LLM 또는 mock LLM |
+| `POST` | `/api/v1/search` | 자연어 아이디어로 관련 특허 검색 | KIPRIS, Gemini |
+| `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 조회 | KIPRIS |
+| `GET` | `/api/v1/patents/{patent_id}/similar` | 기준 특허와 유사한 특허 조회 | KIPRIS |
+| `POST` | `/api/v1/patents/{patent_id}/summary` | 특허 청구항 기반 AI 요약 | KIPRIS, Gemini |
+| `POST` | `/api/v1/patents/{patent_id}/chat` | 단일 특허 기반 Q&A 챗봇 | KIPRIS, Gemini |
 
 ## 문서와 실제 명세 확인 위치
 
@@ -66,14 +67,10 @@ API key가 없습니다.
 | 기능 | 현재 구현 |
 |---|---|
 | 검색 `/api/v1/search` | Query Builder가 자연어를 키워드로 바꾸고 KIPRIS 검색 API를 호출합니다. |
-| 상세 `/api/v1/patents/{patent_id}` | `data/mock_patents.json`의 local mock 상세 데이터를 반환합니다. |
+| 상세 `/api/v1/patents/{patent_id}` | KIPRIS 서지 상세/청구항 API를 호출해 상세 정보를 반환합니다. |
+| 유사특허 `/api/v1/patents/{patent_id}/similar` | KIPRIS 상세에서 제목/IPC를 추출한 뒤 KIPRIS 검색 API로 후보를 반환합니다. |
 | 요약 `/api/v1/patents/{patent_id}/summary` | KIPRIS 서지 상세/청구항 API를 호출한 뒤 LLM으로 요약합니다. |
 | 챗봇 `/api/v1/patents/{patent_id}/chat` | KIPRIS 서지 상세/청구항 API를 호출한 뒤 단일 특허 context Q&A를 수행합니다. |
-
-즉, `GET /api/v1/patents/{patent_id}`는 아직 KIPRIS 실제 상세 API와 연결된
-엔드포인트가 아닙니다. 현재 실제 상세 조회는 요약 서비스 내부에서
-`KIPRISClient.get_patent_detail()`이 사용합니다. 이 차이는 Phase 4 배포 전
-API 정리 시 다시 확인해야 합니다.
 
 ## 공통 응답 정책
 
@@ -242,6 +239,8 @@ KIPRIS 검색 결과를 반환합니다.
   "filters": {
     "applicant": "삼성전자",
     "ipc_codes": ["G06V", "A23L"],
+    "cpc_codes": ["G06V"],
+    "status": "등록",
     "year_from": 2020,
     "year_to": 2026
   },
@@ -256,6 +255,8 @@ KIPRIS 검색 결과를 반환합니다.
 | `filters` | object | 아니오 | 기본 `{}` | 검색 필터 |
 | `filters.applicant` | string 또는 null | 아니오 | 제한 없음 | 출원인명 부분 검색 |
 | `filters.ipc_codes` | string[] 또는 null | 아니오 | prefix 매칭 | IPC prefix 후보 |
+| `filters.cpc_codes` | string[] 또는 null | 아니오 | prefix 매칭 | CPC prefix 후보 |
+| `filters.status` | string 또는 null | 아니오 | 부분 매칭 | 등록, 공개, 거절, 취하 등 상태 필터 |
 | `filters.year_from` | integer 또는 null | 아니오 | 1900~2100 | 출원연도 시작 |
 | `filters.year_to` | integer 또는 null | 아니오 | 1900~2100 | 출원연도 끝 |
 | `page` | integer | 아니오 | 1 이상, 기본 1 | 페이지 번호 |
@@ -302,10 +303,23 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
       "applicant": "서울대학교산학협력단",
       "application_date": "2023-10-31",
       "ipc_codes": ["B60H 1/32", "B60L 58/24"],
+      "cpc_codes": [],
+      "status": "등록",
+      "application_status": "등록",
+      "publication_date": "2025-05-09",
+      "publication_number": "10-2025-0064010",
+      "registration_date": "2026-04-29",
+      "registration_number": "1029609060000",
+      "citation_count": null,
+      "cited_by_count": null,
+      "similarity_score": 100,
       "relevance_score": 100,
       "tags": [],
       "abstract_preview": "주행 데이터에 따라 최적의 배터리 열관리 모드를 도출한다.",
-      "kipris_url": "https://www.kipris.or.kr/"
+      "thumbnail_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
+      "drawing_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
+      "kipris_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
+      "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
     }
   ]
 }
@@ -336,10 +350,23 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
 | `applicant` | string | 출원인 |
 | `application_date` | string 또는 null | 출원일, `YYYY-MM-DD` |
 | `ipc_codes` | string[] | IPC 코드 |
+| `cpc_codes` | string[] | CPC 코드. 현재 KIPRIS 응답에 없으면 빈 배열 |
+| `status` | string 또는 null | 프론트 배지용 정규화 상태. 예: `등록`, `공개`, `거절`, `취하` |
+| `application_status` | string 또는 null | `status`와 동일한 표시용 상태. 프론트 명명 차이 대응 |
+| `publication_date` | string 또는 null | 공개일 또는 공고일 |
+| `publication_number` | string 또는 null | 공개번호 또는 공고번호 |
+| `registration_date` | string 또는 null | 등록일 |
+| `registration_number` | string 또는 null | 등록번호 |
+| `citation_count` | integer 또는 null | KIPRIS 상세의 선행기술문헌 수. 검색 목록에서는 알 수 없으면 null |
+| `cited_by_count` | integer 또는 null | 피인용 수. 현재 사용 중인 KIPRIS endpoint에서 제공하지 않으면 null |
+| `similarity_score` | integer 또는 null | 유사도/관련도 표시용 점수 |
 | `relevance_score` | integer | 백엔드 내부 관련도 점수, 0~100 |
 | `tags` | string[] | 태그. 실제 KIPRIS 검색에서는 비어 있을 수 있음 |
 | `abstract_preview` | string | 초록 요약 미리보기 |
-| `kipris_url` | string 또는 null | KIPRIS 이동 URL |
+| `thumbnail_url` | string 또는 null | KIPRIS 대표도면 thumbnail URL |
+| `drawing_url` | string 또는 null | KIPRIS 대표도면 원본 크기 URL |
+| `kipris_url` | string 또는 null | KIPRIS 이동 URL. 국내 특허는 KIPRIS 상세 새창 URL |
+| `original_url` | string 또는 null | 원문보기 버튼용 URL. 현재 국내 특허는 KIPRIS 상세 새창 URL을 사용 |
 
 #### Search Error Responses
 
@@ -361,13 +388,14 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
 
 특허 상세 정보를 반환합니다.
 
-현재 이 엔드포인트는 `data/mock_patents.json`에 있는 local mock 데이터를 조회합니다.
-따라서 아래 예시는 mock 데이터에 존재하는 ID를 사용합니다.
+현재 이 엔드포인트는 KIPRIS 서지 상세 API와 청구항 API를 호출합니다.
+처음 호출은 외부 API 응답 시간만큼 느릴 수 있고, 이후에는 상세 cache TTL 동안
+SQLite cache를 사용할 수 있습니다.
 
 #### Request
 
 ```bash
-curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0098765
+curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0147601
 ```
 
 #### Path Parameters
@@ -380,26 +408,56 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0098765
 
 ```json
 {
-  "patent_id": "10-2023-0098765",
-  "title": "사용자 식습관 기반 음식 추천 시스템",
-  "applicant": "삼성전자",
-  "application_date": "2023-08-15",
-  "ipc_codes": ["G06N 3/08", "A23L 33/00", "G06V 10/70"],
-  "relevance_score": 92,
-  "tags": ["추천시스템", "딥러닝", "식품", "개인화"],
-  "abstract_preview": "사용자의 과거 식습관 데이터와 음식 이미지를 분석해 맞춤형 식단을 추천합니다.",
-  "kipris_url": "https://www.kipris.or.kr/",
-  "abstract": "본 발명은 음식 이미지와 사용자 건강 정보를 기반으로 섭취 영양소를 추정하고 맞춤형 식단을 추천하는 시스템에 관한 것이다.",
-  "inventors": ["김지훈", "이수민"],
-  "publication_date": "2024-02-20",
-  "registration_date": null,
-  "legal_status": "공개",
+  "patent_id": "10-2023-0147601",
+  "title": "전기자동차의 배터리 열관리 시스템 및 이의 운용 방법",
+  "applicant": "서울대학교산학협력단",
+  "application_date": "2023-10-31",
+  "ipc_codes": ["B60H 1/32", "B60L 58/24"],
+  "cpc_codes": [],
+  "status": "등록",
+  "application_status": "등록",
+  "publication_date": "2025-05-09",
+  "publication_number": "10-2025-0064010",
+  "registration_date": "2026-04-29",
+  "registration_number": "10-2960906-0000",
+  "citation_count": 5,
+  "cited_by_count": null,
+  "similarity_score": 100,
+  "relevance_score": 100,
+  "tags": [],
+  "abstract_preview": "전기자동차의 배터리 열관리 시스템에 관한 발명입니다.",
+  "thumbnail_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
+  "drawing_url": "http://plus.kipris.or.kr/openapi/fileToss.jsp?...",
+  "kipris_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
+  "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat",
+  "abstract": "본 발명은 전기자동차의 배터리 열관리 시스템 및 이의 운용 방법에 관한 것이다.",
+  "inventors": ["김민수", "황인찬", "이상욱", "정연우"],
+  "legal_status": "등록결정(일반)",
   "claims": [
     {
       "number": 1,
-      "text": "사용자 단말로부터 음식 이미지를 수신하고, 학습된 이미지 분석 모델로 음식 종류를 식별하며, 식별된 음식에 대응하는 영양 정보를 산출하는 방법."
+      "text": "전기자동차에 동력을 제공하는 배터리와 제어부를 포함하는 전기자동차의 배터리 열관리 시스템."
     }
-  ]
+  ],
+  "legal_events": [
+    {
+      "status": "수리 (Accepted)",
+      "document_name": "[특허출원]특허출원서",
+      "receipt_date": "2023-10-31",
+      "receipt_number": "1-1-2023-1197539-71"
+    }
+  ],
+  "cited_patents": [
+    {
+      "patent_id": "KR1020200101558 A",
+      "relation": "cited",
+      "source": "prior_art_documents",
+      "kipris_url": "https://www.kipris.or.kr/khome/search/searchResult.do?tab=patent&queryText=KR1020200101558A",
+      "original_url": "https://www.kipris.or.kr/khome/search/searchResult.do?tab=patent&queryText=KR1020200101558A"
+    }
+  ],
+  "cited_by_patents": [],
+  "family_patents": []
 }
 ```
 
@@ -411,10 +469,12 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0098765
 |---|---|---|
 | `abstract` | string | 초록 원문 또는 정규화된 초록 |
 | `inventors` | string[] | 발명자 |
-| `publication_date` | string 또는 null | 공개일 |
-| `registration_date` | string 또는 null | 등록일 |
 | `legal_status` | string 또는 null | 법적 상태 |
 | `claims` | Claim[] | 청구항 목록 |
+| `legal_events` | LegalEvent[] | 출원/보정/거절이유통지/등록결정 등 진행 이벤트 |
+| `cited_patents` | PatentReference[] | KIPRIS 선행기술문헌 기반 인용 후보 |
+| `cited_by_patents` | PatentReference[] | 피인용 특허. 현재 사용 endpoint에서 제공하지 않으면 빈 배열 |
+| `family_patents` | PatentReference[] | 국내 패밀리 특허. 없으면 빈 배열 |
 
 #### Claim
 
@@ -423,11 +483,36 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0098765
 | `number` | integer | 청구항 번호 |
 | `text` | string | 청구항 원문 |
 
+#### LegalEvent
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `status` | string 또는 null | KIPRIS 공통 코드명 |
+| `document_name` | string 또는 null | 서류명 |
+| `receipt_date` | string 또는 null | 접수일 |
+| `receipt_number` | string 또는 null | 접수번호 |
+
+#### PatentReference
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `patent_id` | string 또는 null | 참조 특허/문헌 번호 |
+| `title` | string 또는 null | 발명의 명칭. KIPRIS 응답에 없으면 null |
+| `applicant` | string 또는 null | 출원인. KIPRIS 응답에 없으면 null |
+| `application_date` | string 또는 null | 출원일 |
+| `status` | string 또는 null | 상태 |
+| `relation` | string 또는 null | `cited`, `cited_by`, `family` 등 관계 |
+| `source` | string 또는 null | 매핑 출처 |
+| `kipris_url` | string 또는 null | KIPRIS 이동 URL |
+| `original_url` | string 또는 null | 원문보기 버튼용 URL |
+
 #### Error Responses
 
 | HTTP Status | code | 의미 |
 |---:|---|---|
-| `404` | `PATENT_NOT_FOUND` | local mock data에 해당 ID가 없음 |
+| `404` | `PATENT_NOT_FOUND` | 해당 특허 상세를 찾을 수 없음 |
+| `502` | `DETAIL_UPSTREAM_ERROR` | KIPRIS timeout, HTTP 오류, XML 파싱 실패 등 |
+| `503` | `DETAIL_CONFIGURATION_ERROR` | KIPRIS key 누락 또는 설정 오류 |
 
 예시:
 
@@ -440,6 +525,60 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0098765
   }
 }
 ```
+
+## 유사특허 API
+
+### `GET /api/v1/patents/{patent_id}/similar`
+
+기준 특허를 KIPRIS 상세 API로 조회한 뒤, 제목 키워드와 IPC main group을 이용해
+KIPRIS 검색 API에서 유사 후보를 반환합니다. 완전한 의미 기반 추천 엔진이 아니라
+KIPRIS 실데이터 기반 1차 후보 목록입니다.
+
+#### Request
+
+```bash
+curl -s 'http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/similar?limit=5'
+```
+
+| 이름 | 타입 | 설명 |
+|---|---|---|
+| `patent_id` | string | 기준 특허 ID 또는 출원번호 |
+| `limit` | integer | 1~10, 기본 5 |
+
+#### Response `200`
+
+```json
+{
+  "patent_id": "10-2023-0147601",
+  "strategy": "kipris_title_ipc_search",
+  "results": [
+    {
+      "patent_id": "10-2022-0033592",
+      "title": "전기자동차 배터리 냉각 방법",
+      "applicant": "테스트",
+      "application_date": "2022-01-01",
+      "ipc_codes": ["B60L"],
+      "cpc_codes": [],
+      "status": "공개",
+      "application_status": "공개",
+      "relevance_score": 90,
+      "similarity_score": 90,
+      "tags": [],
+      "abstract_preview": "전기자동차 배터리 제어 기술이다.",
+      "kipris_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020220033592&right=kpat",
+      "original_url": "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020220033592&right=kpat"
+    }
+  ]
+}
+```
+
+#### Similar Error Responses
+
+| HTTP Status | code | 의미 |
+|---:|---|---|
+| `404` | `PATENT_NOT_FOUND` | 기준 특허 상세를 찾을 수 없음 |
+| `502` | `SIMILAR_UPSTREAM_ERROR` | KIPRIS timeout, HTTP 오류, XML 파싱 실패 등 |
+| `503` | `SIMILAR_CONFIGURATION_ERROR` | KIPRIS key 누락 또는 설정 오류 |
 
 ## 요약 API
 
@@ -639,7 +778,7 @@ Phase 4에서 배포 플랫폼에 맞춰 persistent disk 사용 여부를 확정
 | `KIPRIS_SEARCH_PATH` | KIPRIS 자유검색 path | 검색 endpoint |
 | `KIPRIS_DETAIL_PATH` | KIPRIS 서지 상세 path | 상세 endpoint |
 | `KIPRIS_CLAIM_PATH` | KIPRIS 청구항 path | 청구항 endpoint |
-| `LLM_PROVIDER` | `gemini` | `gemini`, `openai`, `mock` |
+| `LLM_PROVIDER` | `gemini` | `gemini`, `openai`, `mock`. 단, `APP_ENV=production` 또는 `prod`에서는 `mock` 금지 |
 | `GEMINI_API_KEY` | 없음 | Gemini API key |
 | `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Gemini model |
 | `OPENAI_API_KEY` | 없음 | OpenAI API key |
@@ -674,10 +813,16 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
   -d '{"query":"전기차 충전소 빈자리를 예측해서 운전자에게 추천하는 서비스","page":1,"page_size":10}'
 ```
 
-mock 상세:
+상세:
 
 ```bash
-curl -s http://127.0.0.1:8000/api/v1/patents/10-2024-0001122
+curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0147601
+```
+
+유사특허:
+
+```bash
+curl -s 'http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/similar?limit=5'
 ```
 
 요약:

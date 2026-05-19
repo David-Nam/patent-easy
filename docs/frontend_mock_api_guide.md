@@ -8,8 +8,8 @@
 ## 목적
 
 초기 개발 단계에서는 프론트엔드 개발을 막지 않기 위해 Mock API 계약을 먼저
-고정했습니다. 현재 배포 서버는 검색과 요약에서 실제 KIPRIS/Gemini를 호출하고,
-상세 조회만 local mock 데이터를 사용합니다. 실제 프론트엔드 연동은
+고정했습니다. 현재 배포 서버는 검색, 상세, 요약, 챗봇에서 실제 KIPRIS/Gemini를
+호출합니다. 실제 프론트엔드 연동은
 `docs/frontend_backend_integration_guide.md`를 우선 확인하세요.
 
 ## 직접 설정하는 방법
@@ -77,6 +77,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 | `GET` | `/health` | 백엔드 서버 상태 확인 |
 | `POST` | `/api/v1/search` | 자연어 검색 요청 후 특허 목록 반환 |
 | `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 조회 |
+| `GET` | `/api/v1/patents/{patent_id}/similar` | 유사특허 후보 조회 |
 | `POST` | `/api/v1/patents/{patent_id}/summary` | 특허 AI 요약 반환 |
 
 ## 호출 예시
@@ -92,7 +93,13 @@ curl -X POST http://127.0.0.1:8000/api/v1/search \
 상세:
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/patents/10-2023-0098765
+curl http://127.0.0.1:8000/api/v1/patents/10-2023-0147601
+```
+
+유사특허:
+
+```bash
+curl 'http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/similar?limit=5'
 ```
 
 요약:
@@ -117,7 +124,7 @@ AI 도구에 전달할 문서는 [frontend_ai_integration.md](frontend_ai_integr
 
 ## 주의사항
 
-- 현재 배포 서버의 검색과 요약은 실제 KIPRIS/Gemini 호출입니다.
-- 현재 배포 서버의 상세 조회는 `data/mock_patents.json` 기준입니다.
+- 현재 배포 서버의 검색, 상세, 요약, 챗봇은 실제 KIPRIS/Gemini 호출입니다.
+- `APP_ENV=production` 또는 `prod`에서는 `LLM_PROVIDER=mock`이 설정 오류로 차단됩니다.
 - 백엔드 CORS는 기본적으로 `localhost:3000`, `127.0.0.1:3000`, `localhost:5173`, `127.0.0.1:5173`을 허용합니다.
 - API 계약이 바뀌면 이 문서와 Swagger UI를 함께 확인하세요.

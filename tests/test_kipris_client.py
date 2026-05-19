@@ -50,6 +50,16 @@ def test_search_patents_maps_fixture_records_and_filters():
         assert results[0].applicant == "서울대학교산학협력단"
         assert results[0].application_date == "2023-10-31"
         assert "B60L 58/24" in results[0].ipc_codes
+        assert results[0].status == "등록"
+        assert results[0].application_status == "등록"
+        assert results[0].publication_date == "2025-05-09"
+        assert results[0].registration_date == "2026-04-29"
+        assert results[0].registration_number == "1029609060000"
+        assert results[0].similarity_score == results[0].relevance_score
+        assert results[0].original_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
+        assert results[0].kipris_url == results[0].original_url
+        assert results[0].thumbnail_url is not None
+        assert results[0].drawing_url is not None
         assert len(results[0].abstract_preview) <= 120
 
         params = requests[0].url.params
@@ -79,6 +89,30 @@ def test_search_patent_page_returns_total_count_from_fixture():
 
         assert search_page.total_count == 180195
         assert len(search_page.items) == 5
+
+    asyncio.run(run())
+
+
+def test_search_filters_by_status_from_kipris_fields():
+    async def run() -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(
+                settings=_settings(kipris_search_path="/search"),
+                http_client=async_client,
+                cache_enabled=False,
+            )
+            registered = await client.search_patents(["자동차"], filters=SearchFilters(status="등록"), page_size=5)
+            rejected = await client.search_patents(["자동차"], filters=SearchFilters(status="거절"), page_size=5)
+        finally:
+            await async_client.aclose()
+
+        assert len(registered) == 5
+        assert all(item.status == "등록" for item in registered)
+        assert rejected == []
 
     asyncio.run(run())
 
@@ -135,12 +169,26 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
         assert detail.application_date == "2023-10-31"
         assert detail.publication_date == "2025-05-09"
         assert detail.registration_date == "2026-04-29"
+        assert detail.registration_number == "10-2960906-0000"
+        assert detail.publication_number == "10-2025-0064010"
+        assert detail.status == "등록"
+        assert detail.application_status == "등록"
         assert detail.legal_status == "등록결정(일반)"
+        assert detail.original_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
+        assert detail.kipris_url == detail.original_url
+        assert detail.thumbnail_url is not None
+        assert detail.drawing_url is not None
         assert "B60H 1/32" in detail.ipc_codes
         assert "김민수" in detail.inventors
         assert len(detail.claims) == 14
         assert detail.claims[0].number == 1
         assert "전기자동차에 동력을 제공하는 배터리" in detail.claims[0].text
+        assert len(detail.legal_events) == 13
+        assert detail.legal_events[0].receipt_date == "2023-10-31"
+        assert len(detail.cited_patents) == 5
+        assert detail.citation_count == 5
+        assert detail.cited_by_patents == []
+        assert detail.family_patents == []
 
         detail_params = requests[0].url.params
         claim_params = requests[1].url.params

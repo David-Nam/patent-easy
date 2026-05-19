@@ -6,6 +6,8 @@ from app.schemas.patent import PatentListItem
 class SearchFilters(BaseModel):
     applicant: str | None = None
     ipc_codes: list[str] | None = None
+    cpc_codes: list[str] | None = None
+    status: str | None = None
     year_from: int | None = Field(default=None, ge=1900, le=2100)
     year_to: int | None = Field(default=None, ge=1900, le=2100)
 

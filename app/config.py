@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -64,6 +64,12 @@ class Settings(BaseModel):
     llm_monthly_budget_usd: float = Field(
         default_factory=lambda: float(os.getenv("LLM_MONTHLY_BUDGET_USD", "50"))
     )
+
+    @model_validator(mode="after")
+    def validate_runtime_provider(self) -> "Settings":
+        if self.app_env.lower() in {"prod", "production"} and self.llm_provider.lower() == "mock":
+            raise ValueError("LLM_PROVIDER=mock is not allowed in production")
+        return self
 
 
 def _parse_cors_origins() -> list[str]:
