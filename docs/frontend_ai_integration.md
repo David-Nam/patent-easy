@@ -375,6 +375,8 @@ Search UI:
 - Renders `title`, `applicant`, `application_date`, `ipc_codes`,
   `status`, `registration_number`, `relevance_score`, `tags`,
   `abstract_preview`, and `original_url`.
+- Renders `cpc_codes`; the backend enriches them through KIPRIS
+  `patentCpcInfo`.
 - Resolves relative `original_url` values against the backend API base URL
   before opening 원문보기.
 - Optionally renders `extracted.keywords` and `extracted.ipc_codes`.

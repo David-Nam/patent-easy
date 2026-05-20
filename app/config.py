@@ -55,6 +55,12 @@ class Settings(BaseModel):
             "/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo",
         )
     )
+    kipris_cpc_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "KIPRIS_CPC_PATH",
+            "/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo",
+        )
+    )
     kipris_full_text_key_param: str = Field(
         default_factory=lambda: os.getenv("KIPRIS_FULL_TEXT_KEY_PARAM", "ServiceKey")
     )

@@ -120,6 +120,7 @@ class KIPRISClient:
             _map_search_item(item, index, self.settings.api_public_base_url)
             for index, item in enumerate(_find_all(root, "PatentUtilityInfo"))
         ]
+        items = await self._enrich_items_with_cpc(items)
         filtered_items = _apply_filters(items, filters)
         total_count = _search_total_count(root, fallback=len(items))
         if _has_filters(filters):
@@ -154,7 +155,8 @@ class KIPRISClient:
 
         detail_root = await self._get_xml(detail_endpoint, {"applicationNumber": compact_id})
         claim_root = await self._get_xml(claim_endpoint, {"applicationNumber": compact_id})
-        detail = _map_patent_detail(detail_root, claim_root)
+        cpc_codes = await self.get_cpc_codes(compact_id)
+        detail = _map_patent_detail(detail_root, claim_root, cpc_codes)
         original_pdf_url = await self.get_original_pdf_url(compact_id, status=detail.status)
         fallback_original_url = _patent_original_pdf_url(compact_id, self.settings.api_public_base_url, detail.status)
         if original_pdf_url:
@@ -164,6 +166,26 @@ class KIPRISClient:
         if self.cache is not None:
             self.cache.set(cache_key, detail.model_dump(mode="json"), self.settings.cache_ttl_detail)
         return detail
+
+    async def get_cpc_codes(self, patent_id: str) -> list[str]:
+        compact_id = _compact_patent_id(patent_id)
+        if not compact_id:
+            return []
+
+        cache_key = self._cpc_cache_key(compact_id)
+        cached_codes = self.cache.get(cache_key) if self.cache is not None else None
+        if isinstance(cached_codes, list):
+            return [code for code in cached_codes if isinstance(code, str)]
+
+        endpoint = _Endpoint(
+            path=self.settings.kipris_cpc_path,
+            key_param=self.settings.kipris_openapi_key_param,
+        )
+        root = await self._get_xml(endpoint, {"applicationNumber": compact_id})
+        cpc_codes = _map_cpc_codes(root)
+        if self.cache is not None:
+            self.cache.set(cache_key, cpc_codes, self.settings.cache_ttl_detail)
+        return cpc_codes
 
     async def get_original_pdf_url(self, patent_id: str, status: str | None = None) -> str | None:
         compact_id = _compact_patent_id(patent_id)
@@ -193,6 +215,16 @@ class KIPRISClient:
                 return pdf_url
 
         return None
+
+    async def _enrich_items_with_cpc(self, items: list[PatentListItem]) -> list[PatentListItem]:
+        enriched_items: list[PatentListItem] = []
+        for item in items:
+            if item.cpc_codes:
+                enriched_items.append(item)
+                continue
+            cpc_codes = await self.get_cpc_codes(item.patent_id)
+            enriched_items.append(item.model_copy(update={"cpc_codes": cpc_codes}))
+        return enriched_items
 
     async def _get_xml(self, endpoint: _Endpoint, params: dict[str, str]) -> ET.Element:
         api_key = self.settings.kipris_api_key
@@ -258,6 +290,7 @@ class KIPRISClient:
             {
                 "base_url": self.settings.kipris_base_url,
                 "path": self.settings.kipris_search_path,
+                "cpc_path": self.settings.kipris_cpc_path,
                 "keywords": keywords,
                 "filters": filters.model_dump(mode="json") if filters else None,
                 "page": page,
@@ -272,6 +305,7 @@ class KIPRISClient:
                 "base_url": self.settings.kipris_base_url,
                 "detail_path": self.settings.kipris_detail_path,
                 "claim_path": self.settings.kipris_claim_path,
+                "cpc_path": self.settings.kipris_cpc_path,
                 "full_text_key_param": self.settings.kipris_full_text_key_param,
                 "full_text_paths": [
                     self.settings.kipris_standard_pub_full_text_path,
@@ -279,6 +313,17 @@ class KIPRISClient:
                     self.settings.kipris_pub_full_text_path,
                     self.settings.kipris_ann_full_text_path,
                 ],
+                "application_number": compact_id,
+            },
+        )
+
+    def _cpc_cache_key(self, compact_id: str) -> str:
+        return normalize_cache_key(
+            "kipris:cpc",
+            {
+                "base_url": self.settings.kipris_base_url,
+                "path": self.settings.kipris_cpc_path,
+                "key_param": self.settings.kipris_openapi_key_param,
                 "application_number": compact_id,
             },
         )
@@ -347,7 +392,7 @@ def _map_search_item(item: ET.Element, index: int, api_public_base_url: str | No
         applicant=_first_text(item, "Applicant") or "",
         application_date=_normalize_date(_first_text(item, "ApplicationDate")),
         ipc_codes=_split_ipc(_first_text(item, "InternationalpatentclassificationNumber")),
-        cpc_codes=_split_codes(_first_text(item, "CpcNumber") or _first_text(item, "CPCNumber")),
+        cpc_codes=_dedupe_codes(_split_codes(_first_text(item, "CpcNumber") or _first_text(item, "CPCNumber"))),
         status=status,
         application_status=status,
         publication_date=_normalize_date(_first_text(item, "OpeningDate") or _first_text(item, "PublicDate")),
@@ -367,7 +412,7 @@ def _map_search_item(item: ET.Element, index: int, api_public_base_url: str | No
     )
 
 
-def _map_patent_detail(detail_root: ET.Element, claim_root: ET.Element) -> PatentDetail:
+def _map_patent_detail(detail_root: ET.Element, claim_root: ET.Element, cpc_codes: list[str]) -> PatentDetail:
     summary = _find_first(detail_root, "biblioSummaryInfo")
     if summary is None:
         raise KIPRISParseError("Missing biblioSummaryInfo in KIPRIS detail response")
@@ -377,7 +422,7 @@ def _map_patent_detail(detail_root: ET.Element, claim_root: ET.Element) -> Paten
     applicant_names = [_first_text(node, "name") for node in _find_all(detail_root, "applicantInfo")]
     inventor_names = [_first_text(node, "name") for node in _find_all(detail_root, "inventorInfo")]
     ipc_codes = [_first_text(node, "ipcNumber") for node in _find_all(detail_root, "ipcInfo")]
-    cpc_codes = [_first_text(node, "cpcNumber") for node in _find_all(detail_root, "cpcInfo")]
+    merged_cpc_codes = _dedupe_codes([*_map_cpc_codes(detail_root), *cpc_codes])
     claims = [_map_claim(node, index) for index, node in enumerate(_find_all(claim_root, "claimInfo"), start=1)]
     patent_id = _first_text(summary, "applicationNumber") or ""
     final_disposal = _first_text(summary, "finalDisposal")
@@ -398,7 +443,7 @@ def _map_patent_detail(detail_root: ET.Element, claim_root: ET.Element) -> Paten
         applicant="|".join(name for name in applicant_names if name) or "",
         application_date=_normalize_date(_first_text(summary, "applicationDate")),
         ipc_codes=[code for code in ipc_codes if code],
-        cpc_codes=[code for code in cpc_codes if code],
+        cpc_codes=merged_cpc_codes,
         status=status,
         application_status=status,
         publication_date=_normalize_date(_first_text(summary, "openDate") or _first_text(summary, "publicationDate")),
@@ -431,6 +476,21 @@ def _map_claim(node: ET.Element, fallback_number: int) -> Claim:
     match = re.match(r"\s*(\d+)\.", text)
     number = int(match.group(1)) if match else fallback_number
     return Claim(number=number, text=text)
+
+
+def _map_cpc_codes(*roots: ET.Element) -> list[str]:
+    codes: list[str] = []
+    for root in roots:
+        for tag_name in [
+            "cpcNumber",
+            "CpcNumber",
+            "CPCNumber",
+            "CooperativepatentclassificationNumber",
+        ]:
+            for node in _find_all(root, tag_name):
+                if node.text:
+                    codes.extend(_split_codes(node.text))
+    return _dedupe_codes(codes)
 
 
 def _map_legal_events(root: ET.Element) -> list[LegalEvent]:
@@ -626,6 +686,21 @@ def _split_codes(value: str | None) -> list[str]:
     if not value:
         return []
     return [part.strip() for part in re.split(r"[|,;]", value) if part.strip()]
+
+
+def _dedupe_codes(values: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = re.sub(r"\s+", " ", value.strip())
+        if not normalized:
+            continue
+        key = normalized.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+    return deduped
 
 
 def _normalize_date(value: str | None) -> str | None:

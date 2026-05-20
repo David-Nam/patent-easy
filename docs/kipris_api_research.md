@@ -19,12 +19,13 @@
 | 자유검색 | `/openapi/rest/patUtiModInfoSearchSevice/freeSearchInfo` | `accessKey` | XML | 구현 완료 |
 | 서지 상세 | `/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch` | `ServiceKey` | XML | 구현 완료 |
 | 청구항 상세 | `/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo` | `accessKey` | XML | 구현 완료 |
+| CPC 정보 | `/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo` | `accessKey` | XML | 구현 완료 |
 | 공개전문 PDF | `/kipo-api/kipi/patUtiModInfoSearchSevice/getPubFullTextInfoSearch` | `ServiceKey` | XML | 구현 완료 |
 | 공고전문 PDF | `/kipo-api/kipi/patUtiModInfoSearchSevice/getAnnFullTextInfoSearch` | `ServiceKey` | XML | 구현 완료 |
 | 표준화 공개전문 PDF | `/kipo-api/kipi/patUtiModInfoSearchSevice/getStandardPubFullTextInfoSearch` | `ServiceKey` | XML | 구현 완료 |
 | 표준화 공고전문 PDF | `/kipo-api/kipi/patUtiModInfoSearchSevice/getStandardAnnFullTextInfoSearch` | `ServiceKey` | XML | 구현 완료 |
 
-주의할 점은 자유검색/청구항 endpoint는 `accessKey`를 사용하고, 서지 상세/원문 PDF endpoint는 `/kipo-api/kipi/...` 경로와 `ServiceKey`를 사용한다는 점입니다.
+주의할 점은 자유검색/청구항/CPC endpoint는 `accessKey`를 사용하고, 서지 상세/원문 PDF endpoint는 `/kipo-api/kipi/...` 경로와 `ServiceKey`를 사용한다는 점입니다.
 
 ## 환경변수 매핑
 
@@ -35,6 +36,7 @@ KIPRIS_DETAIL_KEY_PARAM=ServiceKey
 KIPRIS_SEARCH_PATH=/openapi/rest/patUtiModInfoSearchSevice/freeSearchInfo
 KIPRIS_DETAIL_PATH=/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch
 KIPRIS_CLAIM_PATH=/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo
+KIPRIS_CPC_PATH=/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo
 KIPRIS_FULL_TEXT_KEY_PARAM=ServiceKey
 KIPRIS_PUB_FULL_TEXT_PATH=/kipo-api/kipi/patUtiModInfoSearchSevice/getPubFullTextInfoSearch
 KIPRIS_ANN_FULL_TEXT_PATH=/kipo-api/kipi/patUtiModInfoSearchSevice/getAnnFullTextInfoSearch
@@ -81,6 +83,7 @@ KIPRIS_STANDARD_ANN_FULL_TEXT_PATH=/kipo-api/kipi/patUtiModInfoSearchSevice/getS
 | `RegistrationDate` | `PatentListItem.registration_date` |
 | `RegistrationNumber` | `PatentListItem.registration_number` |
 | `RegistrationStatus` | `PatentListItem.status`, `PatentListItem.application_status` |
+| `patentCpcInfo.CooperativepatentclassificationNumber` | `PatentListItem.cpc_codes` |
 | `ThumbnailPath` | `PatentListItem.thumbnail_url` |
 | `DrawingPath` | `PatentListItem.drawing_url` |
 | `TotalSearchCount` | `SearchResponse.pagination.total_count` |
@@ -89,6 +92,10 @@ KIPRIS_STANDARD_ANN_FULL_TEXT_PATH=/kipo-api/kipi/patUtiModInfoSearchSevice/getS
 생성한 KIPRIS 상세 새창 URL입니다. `original_url`은 검색 목록에서 원문 PDF redirect
 endpoint(`/api/v1/patents/{applicationNumber}/original-pdf?kind=ann|pub`)를 가리킵니다. 프론트엔드는
 이 상대 URL을 백엔드 base URL 기준으로 열어야 합니다.
+
+검색 목록의 `cpc_codes`는 KIPRIS 자유검색 응답에 없을 수 있으므로, 각 결과의
+출원번호로 `patentCpcInfo`를 추가 호출해 보강합니다. 검색 page size만큼 추가
+KIPRIS 호출이 발생할 수 있으므로 cache를 반드시 사용합니다.
 
 KIPRIS 화면의 `openWindow('detail', ...)` 로직은 `/khome/detail/newWindow.do`에
 `applno`, `right`를 전달합니다.
@@ -121,6 +128,7 @@ KIPRIS 화면의 `openWindow('detail', ...)` 로직은 `/khome/detail/newWindow.
 | `applicantInfo.name` | `PatentDetail.applicant` |
 | `inventorInfo.name` | `PatentDetail.inventors` |
 | `ipcInfo.ipcNumber` | `PatentDetail.ipc_codes` |
+| `cpcInfo.cpcNumber`, `patentCpcInfo.CooperativepatentclassificationNumber` | `PatentDetail.cpc_codes` |
 | `astrtCont` | `PatentDetail.abstract` |
 | `legalStatusInfo` | `PatentDetail.legal_events[]` |
 | `priorArtDocumentsInfo.documentsNumber` | `PatentDetail.cited_patents[]`, `PatentDetail.citation_count` |
@@ -132,8 +140,36 @@ KIPRIS 화면의 `openWindow('detail', ...)` 로직은 `/khome/detail/newWindow.
 `cited_by_count`는 `null`로 둡니다. 피인용 네트워크가 필수이면 별도 KIPRIS
 endpoint 또는 KIPRIS 웹 화면의 안정적인 API 확인이 필요합니다.
 
+상세 응답의 `cpc_codes`는 서지 상세 응답의 `cpcInfo`와 별도 CPC API인
+`patentCpcInfo` 응답을 병합하고 중복 제거한 값입니다. 실제 검증한
+`10-2023-0147601`은 `patentCpcInfo`에서 CPC 9개를 반환했습니다.
+
 상세 응답의 `original_url`은 아래 원문 PDF API가 반환한 `path`가 있으면 해당
 `fileToss.jsp` URL을 사용하고, 없으면 원문 PDF redirect endpoint로 fallback합니다.
+
+## CPC 정보
+
+| 항목 | 값 |
+|---|---|
+| path | `/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo` |
+| key parameter | `accessKey` |
+| 입력값 | `applicationNumber` |
+| 응답 형식 | XML |
+
+샘플 요청 형식:
+
+```text
+http://plus.kipris.or.kr/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo?applicationNumber=1020060118886&accessKey=서비스키
+```
+
+샘플 응답의 핵심 구조:
+
+```xml
+<patentCpcInfo>
+  <CooperativepatentclassificationNumber>H04L 1/0009</CooperativepatentclassificationNumber>
+  <CooperativepatentclassificationDate>(2013.01)</CooperativepatentclassificationDate>
+</patentCpcInfo>
+```
 
 ## 원문 PDF 경로
 

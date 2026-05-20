@@ -227,6 +227,9 @@ KIPRIS 검색 결과를 반환합니다.
 `extracted.keywords`를 합친 문자열입니다. `extracted.ipc_codes`와
 `extracted.expanded_terms`는 응답에 포함되지만, 자동 검색 필터로 적용되지는
 않습니다. IPC 필터링이 필요하면 요청의 `filters.ipc_codes`에 명시해야 합니다.
+검색 결과의 `cpc_codes`는 각 검색 결과의 출원번호로 KIPRIS `patentCpcInfo`
+API를 추가 호출해 보강합니다. 따라서 첫 검색 호출은 결과 수만큼 추가 KIPRIS
+요청이 발생할 수 있고, 이후에는 cache TTL 동안 재사용됩니다.
 
 또한 `filters`는 현재 KIPRIS가 반환한 현재 page 결과에 대해 백엔드에서
 후처리로 적용됩니다. 따라서 필터를 사용한 경우 `total_count`는 KIPRIS 전체
@@ -305,7 +308,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
       "applicant": "서울대학교산학협력단",
       "application_date": "2023-10-31",
       "ipc_codes": ["B60H 1/32", "B60L 58/24"],
-      "cpc_codes": [],
+      "cpc_codes": ["B60H 1/32281", "B60L 58/24"],
       "status": "등록",
       "application_status": "등록",
       "publication_date": "2025-05-09",
@@ -352,7 +355,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/search \
 | `applicant` | string | 출원인 |
 | `application_date` | string 또는 null | 출원일, `YYYY-MM-DD` |
 | `ipc_codes` | string[] | IPC 코드 |
-| `cpc_codes` | string[] | CPC 코드. 현재 KIPRIS 응답에 없으면 빈 배열 |
+| `cpc_codes` | string[] | CPC 코드. KIPRIS `patentCpcInfo` API로 보강한 값 |
 | `status` | string 또는 null | 프론트 배지용 정규화 상태. 예: `등록`, `공개`, `거절`, `취하` |
 | `application_status` | string 또는 null | `status`와 동일한 표시용 상태. 프론트 명명 차이 대응 |
 | `publication_date` | string 또는 null | 공개일 또는 공고일 |
@@ -415,7 +418,7 @@ curl -s http://127.0.0.1:8000/api/v1/patents/10-2023-0147601
   "applicant": "서울대학교산학협력단",
   "application_date": "2023-10-31",
   "ipc_codes": ["B60H 1/32", "B60L 58/24"],
-  "cpc_codes": [],
+  "cpc_codes": ["B60H 1/32281", "B60L 58/24"],
   "status": "등록",
   "application_status": "등록",
   "publication_date": "2025-05-09",
@@ -587,7 +590,7 @@ curl -s 'http://127.0.0.1:8000/api/v1/patents/10-2023-0147601/similar?limit=5'
       "applicant": "테스트",
       "application_date": "2022-01-01",
       "ipc_codes": ["B60L"],
-      "cpc_codes": [],
+      "cpc_codes": ["B60L 58/24"],
       "status": "공개",
       "application_status": "공개",
       "relevance_score": 90,
