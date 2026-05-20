@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,6 +19,7 @@ class Settings(BaseModel):
     )
 
     cors_origins: list[str] = Field(default_factory=list)
+    api_public_base_url: str | None = Field(default_factory=lambda: os.getenv("API_PUBLIC_BASE_URL") or None)
 
     llm_provider: str = Field(default_factory=lambda: os.getenv("LLM_PROVIDER", "gemini").lower())
     gemini_api_key: str | None = Field(default_factory=lambda: os.getenv("GEMINI_API_KEY") or None)
@@ -54,15 +55,55 @@ class Settings(BaseModel):
             "/openapi/rest/patUtiModInfoSearchSevice/patentClaimInfo",
         )
     )
+    kipris_cpc_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "KIPRIS_CPC_PATH",
+            "/openapi/rest/patUtiModInfoSearchSevice/patentCpcInfo",
+        )
+    )
+    kipris_full_text_key_param: str = Field(
+        default_factory=lambda: os.getenv("KIPRIS_FULL_TEXT_KEY_PARAM", "ServiceKey")
+    )
+    kipris_pub_full_text_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "KIPRIS_PUB_FULL_TEXT_PATH",
+            "/kipo-api/kipi/patUtiModInfoSearchSevice/getPubFullTextInfoSearch",
+        )
+    )
+    kipris_ann_full_text_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "KIPRIS_ANN_FULL_TEXT_PATH",
+            "/kipo-api/kipi/patUtiModInfoSearchSevice/getAnnFullTextInfoSearch",
+        )
+    )
+    kipris_standard_pub_full_text_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "KIPRIS_STANDARD_PUB_FULL_TEXT_PATH",
+            "/kipo-api/kipi/patUtiModInfoSearchSevice/getStandardPubFullTextInfoSearch",
+        )
+    )
+    kipris_standard_ann_full_text_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "KIPRIS_STANDARD_ANN_FULL_TEXT_PATH",
+            "/kipo-api/kipi/patUtiModInfoSearchSevice/getStandardAnnFullTextInfoSearch",
+        )
+    )
 
     cache_db_path: str = Field(default_factory=lambda: os.getenv("CACHE_DB_PATH", "./data/cache.sqlite"))
     cache_ttl_search: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_SEARCH", "86400")))
     cache_ttl_detail: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_DETAIL", "604800")))
     cache_ttl_summary: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_SUMMARY", "2592000")))
+    cache_ttl_chat: int = Field(default_factory=lambda: int(os.getenv("CACHE_TTL_CHAT", "86400")))
 
     llm_monthly_budget_usd: float = Field(
         default_factory=lambda: float(os.getenv("LLM_MONTHLY_BUDGET_USD", "50"))
     )
+
+    @model_validator(mode="after")
+    def validate_runtime_provider(self) -> "Settings":
+        if self.app_env.lower() in {"prod", "production"} and self.llm_provider.lower() == "mock":
+            raise ValueError("LLM_PROVIDER=mock is not allowed in production")
+        return self
 
 
 def _parse_cors_origins() -> list[str]:

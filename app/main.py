@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
-from app.routers import patents, search, summary
+from app.routers import chat, patents, search, summary
 from app.services.cache import SQLiteCache
 from app.utils.api_errors import error_payload
 from app.utils.logger import get_logger
@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="PatentEasy mock-first backend API.",
+    description="PatentEasy KIPRIS and LLM-backed API.",
 )
 
 app.add_middleware(
@@ -166,3 +166,4 @@ def _llm_readiness() -> dict[str, object]:
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(patents.router, prefix="/api/v1")
 app.include_router(summary.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")

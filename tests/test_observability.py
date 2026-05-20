@@ -1,8 +1,11 @@
+import logging
+
 from fastapi.testclient import TestClient
 
 import app.main as main_module
 from app.config import Settings
 from app.main import app
+from app.utils.logger import get_logger
 
 
 client = TestClient(app)
@@ -69,3 +72,10 @@ def test_request_logging_includes_duration_without_query_string(caplog):
     assert response.status_code == 200
     assert "request method=GET path=/health status_code=200 duration_ms=" in caplog.text
     assert "api_key=secret" not in caplog.text
+
+
+def test_external_http_client_loggers_do_not_emit_info_urls():
+    get_logger("tests.observability")
+
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+    assert logging.getLogger("httpcore").getEffectiveLevel() >= logging.WARNING

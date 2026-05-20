@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from app.schemas.chat import ChatRequest, ChatResponse, ChatSource
 from app.schemas.patent import PatentDetail
 from app.schemas.search import ExtractedQuery
 from app.schemas.summary import SummaryResponse
@@ -134,6 +135,37 @@ class MockLLMClient:
             generated_at=datetime.now(timezone.utc),
             is_cached=False,
         )
+
+    def chat_about_patent(self, patent: PatentDetail, request: ChatRequest) -> ChatResponse:
+        source = _mock_chat_source(patent)
+        relation = "사용자의 원래 검색 의도와 비교하면 " if request.user_query else ""
+        return ChatResponse(
+            patent_id=patent.patent_id,
+            answer=(
+                f"{relation}{patent.title}에 대해 답하면, 이 특허는 초록과 청구항에 적힌 "
+                "기술 구성 안에서만 관련성을 판단할 수 있습니다. "
+                f"질문 '{request.question}'에 대한 Mock 답변은 근거 문장을 함께 확인하는 용도입니다."
+            ),
+            sources=[source] if source else [],
+            generated_at=datetime.now(timezone.utc),
+            is_cached=False,
+        )
+
+
+def _mock_chat_source(patent: PatentDetail) -> ChatSource | None:
+    if patent.claims:
+        claim = patent.claims[0]
+        return ChatSource(type="claim", claim_number=claim.number, snippet=_snippet(claim.text))
+    if patent.abstract:
+        return ChatSource(type="abstract", snippet=_snippet(patent.abstract))
+    return None
+
+
+def _snippet(value: str, limit: int = 220) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
 
 
 mock_llm_client = MockLLMClient()

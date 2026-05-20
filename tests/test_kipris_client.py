@@ -25,6 +25,8 @@ def test_search_patents_maps_fixture_records_and_filters():
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
+            if request.url.path == "/cpc":
+                return _xml_response(_cpc_xml("B60L 58/24", "Y02T 10/70"))
             assert request.url.path == "/search"
             return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
 
@@ -50,6 +52,17 @@ def test_search_patents_maps_fixture_records_and_filters():
         assert results[0].applicant == "서울대학교산학협력단"
         assert results[0].application_date == "2023-10-31"
         assert "B60L 58/24" in results[0].ipc_codes
+        assert results[0].cpc_codes == ["B60L 58/24", "Y02T 10/70"]
+        assert results[0].status == "등록"
+        assert results[0].application_status == "등록"
+        assert results[0].publication_date == "2025-05-09"
+        assert results[0].registration_date == "2026-04-29"
+        assert results[0].registration_number == "1029609060000"
+        assert results[0].similarity_score == results[0].relevance_score
+        assert results[0].original_url == "/api/v1/patents/1020230147601/original-pdf?kind=ann"
+        assert results[0].kipris_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
+        assert results[0].thumbnail_url is not None
+        assert results[0].drawing_url is not None
         assert len(results[0].abstract_preview) <= 120
 
         params = requests[0].url.params
@@ -64,6 +77,8 @@ def test_search_patents_maps_fixture_records_and_filters():
 def test_search_patent_page_returns_total_count_from_fixture():
     async def run() -> None:
         def handler(_request: httpx.Request) -> httpx.Response:
+            if _request.url.path == "/cpc":
+                return _xml_response(_cpc_xml("B60L 58/24"))
             return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -83,9 +98,37 @@ def test_search_patent_page_returns_total_count_from_fixture():
     asyncio.run(run())
 
 
+def test_search_filters_by_status_from_kipris_fields():
+    async def run() -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            if _request.url.path == "/cpc":
+                return _xml_response(_cpc_xml("B60L 58/24"))
+            return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
+
+        async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            client = KIPRISClient(
+                settings=_settings(kipris_search_path="/search"),
+                http_client=async_client,
+                cache_enabled=False,
+            )
+            registered = await client.search_patents(["자동차"], filters=SearchFilters(status="등록"), page_size=5)
+            rejected = await client.search_patents(["자동차"], filters=SearchFilters(status="거절"), page_size=5)
+        finally:
+            await async_client.aclose()
+
+        assert len(registered) == 5
+        assert all(item.status == "등록" for item in registered)
+        assert rejected == []
+
+    asyncio.run(run())
+
+
 def test_kipris_logs_endpoint_calls_without_api_key(caplog):
     async def run() -> None:
         def handler(_request: httpx.Request) -> httpx.Response:
+            if _request.url.path == "/cpc":
+                return _xml_response(_cpc_xml("B60L 58/24"))
             return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -116,12 +159,34 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
                 return _xml_response(_read_fixture("bibliography_detail_20260506T233858Z.xml"))
             if request.url.path == "/claim":
                 return _xml_response(_read_fixture("claim_detail_20260506T233858Z.xml"))
+            if request.url.path == "/cpc":
+                return _xml_response(
+                    "<response><header><resultCode>00</resultCode>"
+                    "<resultMsg>NORMAL SERVICE.</resultMsg></header><body><items>"
+                    "<patentCpcInfo>"
+                    "<CooperativepatentclassificationNumber>B60L 58/24</CooperativepatentclassificationNumber>"
+                    "<CooperativepatentclassificationDate>(2026.01)</CooperativepatentclassificationDate>"
+                    "</patentCpcInfo>"
+                    "<patentCpcInfo>"
+                    "<CooperativepatentclassificationNumber>Y02T 10/70</CooperativepatentclassificationNumber>"
+                    "<CooperativepatentclassificationDate>(2026.01)</CooperativepatentclassificationDate>"
+                    "</patentCpcInfo>"
+                    "</items></body></response>"
+                )
+            if request.url.path == "/standard-ann-pdf":
+                return _xml_response(
+                    "<response><header><resultCode>00</resultCode>"
+                    "<resultMsg>NORMAL SERVICE.</resultMsg></header><body><item>"
+                    "<docName>1020230147601.PDF</docName>"
+                    "<path>http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf</path>"
+                    "</item></body></response>"
+                )
             return httpx.Response(404, text="not found")
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         try:
             client = KIPRISClient(
-                settings=_settings(kipris_detail_path="/detail", kipris_claim_path="/claim"),
+                settings=_settings(kipris_detail_path="/detail", kipris_claim_path="/claim", kipris_cpc_path="/cpc"),
                 http_client=async_client,
                 cache_enabled=False,
             )
@@ -135,19 +200,40 @@ def test_get_patent_detail_maps_bibliography_and_claim_fixtures():
         assert detail.application_date == "2023-10-31"
         assert detail.publication_date == "2025-05-09"
         assert detail.registration_date == "2026-04-29"
+        assert detail.registration_number == "10-2960906-0000"
+        assert detail.publication_number == "10-2025-0064010"
+        assert detail.status == "등록"
+        assert detail.application_status == "등록"
         assert detail.legal_status == "등록결정(일반)"
+        assert detail.original_url == "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf"
+        assert detail.kipris_url == "https://www.kipris.or.kr/khome/detail/newWindow.do?applno=1020230147601&right=kpat"
+        assert detail.thumbnail_url is not None
+        assert detail.drawing_url is not None
         assert "B60H 1/32" in detail.ipc_codes
+        assert detail.cpc_codes == ["B60L 58/24", "Y02T 10/70"]
         assert "김민수" in detail.inventors
         assert len(detail.claims) == 14
         assert detail.claims[0].number == 1
         assert "전기자동차에 동력을 제공하는 배터리" in detail.claims[0].text
+        assert len(detail.legal_events) == 13
+        assert detail.legal_events[0].receipt_date == "2023-10-31"
+        assert len(detail.cited_patents) == 5
+        assert detail.citation_count == 5
+        assert detail.cited_by_patents == []
+        assert detail.family_patents == []
 
         detail_params = requests[0].url.params
         claim_params = requests[1].url.params
+        cpc_params = requests[2].url.params
+        full_text_params = requests[3].url.params
         assert detail_params["applicationNumber"] == "1020230147601"
         assert detail_params["ServiceKey"] == "test-key"
         assert claim_params["applicationNumber"] == "1020230147601"
         assert claim_params["accessKey"] == "test-key"
+        assert cpc_params["applicationNumber"] == "1020230147601"
+        assert cpc_params["accessKey"] == "test-key"
+        assert full_text_params["applicationNumber"] == "1020230147601"
+        assert full_text_params["ServiceKey"] == "test-key"
 
     asyncio.run(run())
 
@@ -246,8 +332,10 @@ def test_search_patents_uses_cache_for_repeated_requests(tmp_path):
         def handler(_request: httpx.Request) -> httpx.Response:
             nonlocal request_count
             request_count += 1
-            if request_count > 1:
+            if request_count > 6:
                 raise httpx.ReadTimeout("cache should prevent repeated upstream calls")
+            if _request.url.path == "/cpc":
+                return _xml_response(_cpc_xml("B60L 58/24"))
             return _xml_response(_read_fixture("free_search_20260506T233857Z.xml"))
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -262,7 +350,7 @@ def test_search_patents_uses_cache_for_repeated_requests(tmp_path):
         finally:
             await async_client.aclose()
 
-        assert request_count == 1
+        assert request_count == 6
         assert first[0].patent_id == second[0].patent_id
         assert isinstance(second[0].application_date, str)
 
@@ -279,12 +367,29 @@ def test_get_patent_detail_uses_cache_for_repeated_requests(tmp_path):
                 return _xml_response(_read_fixture("bibliography_detail_20260506T233858Z.xml"))
             if request.url.path == "/claim":
                 return _xml_response(_read_fixture("claim_detail_20260506T233858Z.xml"))
+            if request.url.path == "/cpc":
+                return _xml_response(
+                    "<response><header><resultCode>00</resultCode>"
+                    "<resultMsg>NORMAL SERVICE.</resultMsg></header><body><items>"
+                    "<patentCpcInfo>"
+                    "<CooperativepatentclassificationNumber>B60L 58/24</CooperativepatentclassificationNumber>"
+                    "</patentCpcInfo>"
+                    "</items></body></response>"
+                )
+            if request.url.path == "/standard-ann-pdf":
+                return _xml_response(
+                    "<response><header><resultCode>00</resultCode>"
+                    "<resultMsg>NORMAL SERVICE.</resultMsg></header><body><item>"
+                    "<docName>1020230147601.PDF</docName>"
+                    "<path>http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf</path>"
+                    "</item></body></response>"
+                )
             return httpx.Response(404, text="not found")
 
         async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         try:
             client = KIPRISClient(
-                settings=_settings(kipris_detail_path="/detail", kipris_claim_path="/claim"),
+                settings=_settings(kipris_detail_path="/detail", kipris_claim_path="/claim", kipris_cpc_path="/cpc"),
                 http_client=async_client,
                 cache=SQLiteCache(tmp_path / "cache.sqlite"),
             )
@@ -293,9 +398,11 @@ def test_get_patent_detail_uses_cache_for_repeated_requests(tmp_path):
         finally:
             await async_client.aclose()
 
-        assert request_paths == ["/detail", "/claim"]
+        assert request_paths == ["/detail", "/claim", "/cpc", "/standard-ann-pdf"]
         assert first.patent_id == second.patent_id
         assert len(second.claims) == 14
+        assert second.cpc_codes == ["B60L 58/24"]
+        assert second.original_url == "http://plus.kipris.or.kr/kiprisplusws/fileToss.jsp?arg=test-pdf"
 
     asyncio.run(run())
 
@@ -309,6 +416,12 @@ def _settings(**overrides) -> Settings:
         "kipris_search_path": "/search",
         "kipris_detail_path": "/detail",
         "kipris_claim_path": "/claim",
+        "kipris_cpc_path": "/cpc",
+        "kipris_full_text_key_param": "ServiceKey",
+        "kipris_pub_full_text_path": "/pub-pdf",
+        "kipris_ann_full_text_path": "/ann-pdf",
+        "kipris_standard_pub_full_text_path": "/standard-pub-pdf",
+        "kipris_standard_ann_full_text_path": "/standard-ann-pdf",
     }
     values.update(overrides)
     return Settings(**values)
@@ -320,3 +433,18 @@ def _read_fixture(name: str) -> str:
 
 def _xml_response(text: str) -> httpx.Response:
     return httpx.Response(200, text=text, headers={"content-type": "text/xml;charset=utf-8"})
+
+
+def _cpc_xml(*codes: str) -> str:
+    items = "".join(
+        "<patentCpcInfo>"
+        f"<CooperativepatentclassificationNumber>{code}</CooperativepatentclassificationNumber>"
+        "<CooperativepatentclassificationDate>(2026.01)</CooperativepatentclassificationDate>"
+        "</patentCpcInfo>"
+        for code in codes
+    )
+    return (
+        "<response><header><resultCode>00</resultCode>"
+        "<resultMsg>NORMAL SERVICE.</resultMsg></header>"
+        f"<body><items>{items}</items></body></response>"
+    )

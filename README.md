@@ -34,7 +34,7 @@ LLM_PROVIDER=gemini
 GEMINI_API_KEY=...
 ```
 
-실제 키 없이도 기본 테스트는 실행할 수 있습니다. 다만 실제 `/api/v1/search`, `/api/v1/patents/{id}/summary` 흐름을 로컬에서 직접 호출하려면 KIPRIS와 Gemini 키가 필요합니다.
+실제 키 없이도 기본 테스트는 실행할 수 있습니다. 다만 실제 `/api/v1/search`, `/api/v1/patents/{id}/summary`, `/api/v1/patents/{id}/chat` 흐름을 로컬에서 직접 호출하려면 KIPRIS와 Gemini 키가 필요합니다.
 
 ## 실행
 
@@ -73,6 +73,7 @@ Render에 등록할 주요 환경변수는 다음과 같습니다.
 | `CACHE_TTL_SEARCH` | `86400` |
 | `CACHE_TTL_DETAIL` | `604800` |
 | `CACHE_TTL_SUMMARY` | `2592000` |
+| `CACHE_TTL_CHAT` | `86400` |
 | `CORS_ORIGINS` | 배포된 프론트엔드 origin, 없으면 로컬 개발 origin |
 
 Render 무료 Web Service는 15분 동안 요청이 없으면 sleep될 수 있고, 재시작이나
@@ -99,6 +100,7 @@ DEPLOYED_API_BASE_URL=https://patent-easy-api.onrender.com \
 | `POST` | `/api/v1/search` | 자연어 아이디어를 키워드로 변환한 뒤 KIPRIS 검색 |
 | `GET` | `/api/v1/patents/{patent_id}` | 특허 상세 정보 조회 |
 | `POST` | `/api/v1/patents/{patent_id}/summary` | KIPRIS 상세/청구항 기반 LLM 요약 생성 |
+| `POST` | `/api/v1/patents/{patent_id}/chat` | KIPRIS 상세/청구항 기반 단일 특허 Q&A |
 
 상세한 요청/응답 예시와 에러 코드는 `docs/api_reference.md`를 기준으로 확인합니다.
 
@@ -124,6 +126,14 @@ curl -X POST http://localhost:8000/api/v1/patents/10-2023-0147601/summary \
   -d '{"user_query":"전기차 배터리 열관리 기능"}'
 ```
 
+### 챗봇 예시
+
+```bash
+curl -X POST http://localhost:8000/api/v1/patents/10-2023-0147601/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"이 특허는 전기차 배터리 열관리 기능과 관련이 있나요?","user_query":"전기차 배터리 열관리 기능","history":[]}'
+```
+
 ## 환경변수
 
 주요 환경변수는 `.env.example`을 기준으로 관리합니다.
@@ -138,6 +148,7 @@ curl -X POST http://localhost:8000/api/v1/patents/10-2023-0147601/summary \
 | `CACHE_TTL_SEARCH` | 검색 cache TTL, 초 단위 |
 | `CACHE_TTL_DETAIL` | 상세 cache TTL, 초 단위 |
 | `CACHE_TTL_SUMMARY` | 요약 cache TTL, 초 단위 |
+| `CACHE_TTL_CHAT` | 챗봇 cache TTL, 초 단위 |
 | `RUN_LIVE_KIPRIS` | 실제 KIPRIS live 테스트 실행 플래그 |
 | `RUN_LIVE_LLM` | 실제 LLM live 테스트 실행 플래그 |
 
@@ -178,6 +189,13 @@ venv/bin/python scripts/run_quality_gate.py --live-llm
 venv/bin/python scripts/run_quality_gate.py --live-kipris --live-llm --live-summary
 ```
 
+챗봇 live 검증은 실제 KIPRIS/Gemini 호출을 사용하므로 필요할 때만 별도로 실행합니다.
+
+```bash
+RUN_LIVE_KIPRIS=1 RUN_LIVE_LLM=1 \
+  venv/bin/python -m pytest tests/test_chat_live.py -m "live_kipris and live_llm" -s
+```
+
 ## 검색 품질 평가
 
 기본 benchmark는 외부 API를 호출하지 않고 mock/local corpus로 실행됩니다.
@@ -201,4 +219,6 @@ venv/bin/python scripts/benchmark.py --mode mock --cache off
 | `docs/release_notes.md` | Render Demo 릴리스 상태와 known limitations |
 | `docs/kipris_api_research.md` | KIPRIS Plus API 검증 결과 |
 | `docs/keyword_prompt_design.md` | 키워드 추출 프롬프트 설계 |
-| `docs/frontend_mock_api_guide.md` | 프론트엔드 연동 가이드 |
+| `docs/frontend_backend_integration_guide.md` | 배포 백엔드 기준 프론트엔드 연동 가이드 |
+| `docs/frontend_ai_integration.md` | AI 개발 도구용 프론트엔드 연동 스펙 |
+| `docs/frontend_mock_api_guide.md` | 초기 로컬 Mock API 참고 문서 |

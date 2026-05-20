@@ -17,3 +17,6 @@ __pycache__/
 data/cache.sqlite*
 
 .DS_Store
+
+*.xlsx
+*.xls
